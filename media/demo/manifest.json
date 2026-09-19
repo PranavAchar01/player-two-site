@@ -12,57 +12,103 @@
     "overhead press"
    ],
    "agentTask": "dumbbell shoulder press",
-   "recordedAt": "2026-09-19T09:53:02.953Z",
+   "recordedAt": "2026-09-19T21:43:51.633Z",
    "summary": {
-    "found": 12,
-    "judged": 7,
-    "accepted": 6,
-    "rejected": 1,
-    "episodes": 6,
-    "seconds": 151
+    "found": 68,
+    "judged": 36,
+    "accepted": 22,
+    "rejected": 14,
+    "episodes": 22,
+    "seconds": 1006
    },
    "steps": [
     {
      "name": "Plan",
-     "detail": "gemini (gemini-flash-latest): 5 queries, both arm, arm_elevation 120 x1 any",
-     "ms": 5872
+     "detail": "gemini (gemini-flash-lite-latest): 5 queries, both arm, arm_elevation 65 x1 any. gemini-flash-latest: HTTP 503",
+     "ms": 4737
     },
     {
      "name": "Search",
-     "detail": "12 candidates (youtube-cc 12 usable). Fetching until 8 are judged, at most 12 attempts",
-     "ms": 22374
+     "detail": "68 candidates (youtube-cc 68 usable). Fetching until 70 are judged or 22 are accepted, at most 140 download attempts",
+     "ms": 192777
     },
     {
      "name": "Fetch and track",
-     "detail": "7 of 12 attempted videos fetched and tracked, 5 failed",
-     "ms": 110617
+     "detail": "36 videos tracked: 51 download attempts (24 refused or failed), 9 reused from disk. Stopped because the target of 22 accepted clips was reached",
+     "ms": 775219
     },
     {
      "name": "Judge footage",
-     "detail": "6 accepted, 1 rejected",
-     "ms": 320
+     "detail": "22 accepted, 14 rejected",
+     "ms": 1184
     },
     {
      "name": "Retarget",
-     "detail": "6 episodes written for the g1, 0 failed",
-     "ms": 11478
+     "detail": "22 episodes written for the g1, 0 failed",
+     "ms": 32427
     },
     {
      "name": "Write dataset",
-     "detail": "data/runs/20260919-095031-dumbbell-shoulder-press-9180/run.json and data/runs/20260919-095031-dumbbell-shoulder-press-9180/REPORT.md",
-     "ms": 0
+     "detail": "data/runs/20260919-212705-dumbbell-shoulder-press-4721/run.json and data/runs/20260919-212705-dumbbell-shoulder-press-4721/REPORT.md",
+     "ms": 2
     }
    ],
    "rejections": [
     {
-     "title": "Seated Overhead Shoulder Press (Anterior)   PhysiqueDevelopm",
-     "reason": "frontal view: shoulders turned 41.5 deg from the camera plane, limit 35 deg"
+     "title": "Seated shoulder press",
+     "reason": "frontal view: shoulders turned 55.8 deg from the camera plane, limit 35 deg"
+    },
+    {
+     "title": "Dumbbell Alternating Overhead Press",
+     "reason": "frontal view: shoulders turned 41 deg from the camera plane, limit 35 deg"
+    },
+    {
+     "title": "Shoulder Press Exercise",
+     "reason": "facing camera: facing the camera in 0% of frames, need 95%"
+    },
+    {
+     "title": "Dumbbell Shoulder Press Pronated",
+     "reason": "frontal view: shoulders turned 44.4 deg from the camera plane, limit 35 deg"
     }
    ],
    "clips": [
     {
      "file": "media/demo/g1-shoulder-press/clip-1.mp4",
      "poster": "media/demo/g1-shoulder-press/clip-1.jpg",
+     "title": "Shoulder Exercises - Alternative Neutral Grip Shoulder Press",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=XurSWBEgL6I",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Fitnessyard",
+     "quality": 0.994,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 20,
+      "lagAfter": 0,
+      "speedCap": 0.3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-2.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-2.jpg",
+     "title": "Standing DB Shoulder Press  PhysiqueDevelopment.com",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=U9ZRi5VwSo8",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Physique Development",
+     "quality": 0.992,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 20,
+      "lagAfter": 0,
+      "speedCap": 1
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-3.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-3.jpg",
      "title": "Dumbbell Shoulder Press   Breaking Bench",
      "seconds": 6,
      "source": "YouTube, Creative Commons",
@@ -78,25 +124,25 @@
      }
     },
     {
-     "file": "media/demo/g1-shoulder-press/clip-2.mp4",
-     "poster": "media/demo/g1-shoulder-press/clip-2.jpg",
-     "title": "Seated Shoulder Press",
+     "file": "media/demo/g1-shoulder-press/clip-4.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-4.jpg",
+     "title": "Overhead Press  - Shoulder Strength & Stability @Ott_Physical_Therapy",
      "seconds": 6,
      "source": "YouTube, Creative Commons",
-     "url": "https://www.youtube.com/watch?v=NwNaIdm1bHc",
+     "url": "https://www.youtube.com/watch?v=QTNCcxAPEsQ",
      "licence": "Creative Commons Attribution (CC BY)",
-     "author": "Fitness Volt",
-     "quality": 0.991,
+     "author": "Ott Physical Therapy",
+     "quality": 0.99,
      "stats": {
       "tracked": 100,
-      "lagBefore": 20,
+      "lagBefore": 40,
       "lagAfter": 20,
-      "speedCap": 1.3
+      "speedCap": 1.7
      }
     },
     {
-     "file": "media/demo/g1-shoulder-press/clip-3.mp4",
-     "poster": "media/demo/g1-shoulder-press/clip-3.jpg",
+     "file": "media/demo/g1-shoulder-press/clip-5.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-5.jpg",
      "title": "Shoulder Exercises - Seated Dumbbell Shoulder Press",
      "seconds": 6,
      "source": "YouTube, Creative Commons",
@@ -112,37 +158,241 @@
      }
     },
     {
-     "file": "media/demo/g1-shoulder-press/clip-4.mp4",
-     "poster": "media/demo/g1-shoulder-press/clip-4.jpg",
-     "title": "Overhead DB Press Seated Unsupported Neutral Grip",
+     "file": "media/demo/g1-shoulder-press/clip-6.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-6.jpg",
+     "title": "Shoulder Exercises - Neutral Grip Shoulder Press",
      "seconds": 6,
      "source": "YouTube, Creative Commons",
-     "url": "https://www.youtube.com/watch?v=UYp-YosNG58",
+     "url": "https://www.youtube.com/watch?v=WhTpFyVflq8",
      "licence": "Creative Commons Attribution (CC BY)",
-     "author": "THP - Total Health Performance",
-     "quality": 0.941,
-     "stats": {
-      "tracked": 92.3,
-      "lagBefore": 40,
-      "lagAfter": 20,
-      "speedCap": 4
-     }
-    },
-    {
-     "file": "media/demo/g1-shoulder-press/clip-5.mp4",
-     "poster": "media/demo/g1-shoulder-press/clip-5.jpg",
-     "title": "Dumbbell Seated Shoulder Press",
-     "seconds": 6,
-     "source": "YouTube, Creative Commons",
-     "url": "https://www.youtube.com/watch?v=tMPcCpA_gIM",
-     "licence": "Creative Commons Attribution (CC BY)",
-     "author": "Get Strong with Emily",
-     "quality": 0.934,
+     "author": "Fitnessyard",
+     "quality": 0.987,
      "stats": {
       "tracked": 100,
       "lagBefore": 20,
       "lagAfter": 0,
-      "speedCap": 4.3
+      "speedCap": 1.3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-7.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-7.jpg",
+     "title": "Shoulder Exercises - Arnold Press",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=k9j7ywg11Wk",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Fitnessyard",
+     "quality": 0.987,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 20,
+      "lagAfter": 20,
+      "speedCap": 1.3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-8.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-8.jpg",
+     "title": "Shoulder Press  Dumbbells Alternating Arms with Coach Steve",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=o2aIrgOPJoQ",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Steve Eckert",
+     "quality": 0.982,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 20,
+      "lagAfter": 0,
+      "speedCap": 2.3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-9.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-9.jpg",
+     "title": "Shoulder Exercises - Arnold Press",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=KDOhglH9eVg",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Fitnessyard",
+     "quality": 0.982,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 20,
+      "speedCap": 2
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-10.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-10.jpg",
+     "title": "See-Saw Dumbbell Press #exercise #guide",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=robnpTausnE",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Fitness Volt",
+     "quality": 0.979,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 3.7
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-11.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-11.jpg",
+     "title": "dumbbell workout at home for women  dumbbell exercises for women  Over",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=ocsUoxFvzWI",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "FitFun",
+     "quality": 0.978,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 20,
+      "lagAfter": 0,
+      "speedCap": 3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-12.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-12.jpg",
+     "title": "Seated Arnold Press 1",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=RKpxmYFQzsE",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Tara Garrison",
+     "quality": 0.976,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-13.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-13.jpg",
+     "title": "Shoulder Machine Development",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=Hhb2AR7mUCw",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Italo Calisthenics",
+     "quality": 0.968,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 20,
+      "lagAfter": 20,
+      "speedCap": 2.3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-14.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-14.jpg",
+     "title": "DB Shoulder Press",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=joGE5xtXl9I",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Avid Fitness",
+     "quality": 0.964,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 60,
+      "lagAfter": 40,
+      "speedCap": 2.3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-15.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-15.jpg",
+     "title": "Standing DB Shoulder Press",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=6NrWBRhnHfQ",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Avid Fitness",
+     "quality": 0.964,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 1.7
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-16.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-16.jpg",
+     "title": "Barbell Shoulder Press - Military Press - Best Barbells",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=HNg5b1YBCXw",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Best Barbells",
+     "quality": 0.952,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 20,
+      "lagAfter": 20,
+      "speedCap": 1.3
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-17.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-17.jpg",
+     "title": "Shoulder Exercises -- Lever Shoulder Press -- Parallel Grip",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=8ejBopL8keY",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Fitnessyard",
+     "quality": 0.918,
+     "stats": {
+      "tracked": 99.3,
+      "lagBefore": 20,
+      "lagAfter": 0,
+      "speedCap": 4
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-18.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-18.jpg",
+     "title": "Overhead Squat Dumbbells",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=Qh_fhj5CPG4",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "David Kimmerle",
+     "quality": 0.914,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 40,
+      "speedCap": 5.7
+     }
+    },
+    {
+     "file": "media/demo/g1-shoulder-press/clip-19.mp4",
+     "poster": "media/demo/g1-shoulder-press/clip-19.jpg",
+     "title": "Seated DB Anterior Shoulder Press   PhysiqueDevelopment.com",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=2HdeGWc0UF4",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Physique Development",
+     "quality": 0.91,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 20,
+      "lagAfter": 20,
+      "speedCap": 5
      }
     }
    ]
@@ -151,84 +401,193 @@
    "id": "so101-lateral-raise",
    "robot": "SO-101",
    "robotId": "so101",
-   "task": "follow a dumbbell lateral raise",
+   "task": "raise one arm out to the side and lower it",
    "tier": "curated",
    "match": [
+    "arm out to the side",
+    "one arm",
     "lateral raise",
     "side raise"
    ],
-   "agentTask": "dumbbell lateral raise",
-   "recordedAt": "2026-09-19T08:56:14.762Z",
+   "agentTask": "raise one arm out to the side and lower it",
+   "recordedAt": "2026-09-19T21:43:13.221Z",
    "summary": {
-    "found": 8,
-    "judged": 5,
-    "accepted": 5,
-    "rejected": 0,
-    "episodes": 5,
-    "seconds": 136
+    "found": 68,
+    "judged": 34,
+    "accepted": 22,
+    "rejected": 12,
+    "episodes": 22,
+    "seconds": 971
    },
    "steps": [
     {
      "name": "Plan",
-     "detail": "gemini (gemini-flash-lite-latest): 4 queries, both arm, arm_elevation 65 x2 sideways. gemini-flash-latest: HTTP 503",
-     "ms": 2779
+     "detail": "gemini (gemini-flash-latest): 5 queries, either arm, arm_elevation 65 x1 sideways",
+     "ms": 4097
     },
     {
      "name": "Search",
-     "detail": "8 candidates (youtube-cc 8 usable). Fetching until 5 are judged, at most 8 attempts",
-     "ms": 13430
+     "detail": "68 candidates (youtube-cc 68 usable). Fetching until 70 are judged or 22 are accepted, at most 140 download attempts",
+     "ms": 188056
     },
     {
      "name": "Fetch and track",
-     "detail": "5 of 7 attempted videos fetched and tracked, 2 failed",
-     "ms": 104932
+     "detail": "34 videos tracked: 49 download attempts (24 refused or failed), 9 reused from disk. Stopped because the target of 22 accepted clips was reached",
+     "ms": 753173
     },
     {
      "name": "Judge footage",
-     "detail": "5 accepted, 0 rejected",
-     "ms": 192
+     "detail": "22 accepted, 12 rejected",
+     "ms": 931
     },
     {
      "name": "Retarget",
-     "detail": "5 episodes written for the so101, 0 failed",
-     "ms": 14209
+     "detail": "22 episodes written for the so101, 0 failed",
+     "ms": 24529
     },
     {
      "name": "Write dataset",
-     "detail": "data/runs/20260919-085358-dumbbell-lateral-raise-caa9/run.json and data/runs/20260919-085358-dumbbell-lateral-raise-caa9/REPORT.md",
+     "detail": "data/runs/20260919-212702-raise-one-arm-out-to-the-side-and-lower-4f57/run.json and data/runs/20260919-212702-raise-one-arm-out-to-the-side-and-lower-4f57/REPORT.md",
      "ms": 1
     }
    ],
-   "rejections": [],
+   "rejections": [
+    {
+     "title": "Lying Dumbbell Skull Crushers",
+     "reason": "frontal view: shoulders turned 35.8 deg from the camera plane, limit 35 deg"
+    },
+    {
+     "title": "Supine Bridge w/1-Leg Hip Abduction",
+     "reason": "frontal view: shoulders turned 86.9 deg from the camera plane, limit 35 deg"
+    },
+    {
+     "title": "Resisted Shoulder Internal Rotation in Abduction - Advanced ",
+     "reason": "frontal view: shoulders turned 68.3 deg from the camera plane, limit 35 deg"
+    },
+    {
+     "title": "How to do a Half Kneeling One Arm Band Row with Rotating Gri",
+     "reason": "frontal view: shoulders turned 88.3 deg from the camera plane, limit 35 deg"
+    }
+   ],
    "clips": [
     {
      "file": "media/demo/so101-lateral-raise/clip-1.mp4",
      "poster": "media/demo/so101-lateral-raise/clip-1.jpg",
-     "title": "Dumbbell Lateral Raise exercise",
+     "title": "Basic Dumbbell Lateral Raise at Home Exercise",
      "seconds": 6,
      "source": "YouTube, Creative Commons",
-     "url": "https://www.youtube.com/watch?v=Yn7iYyF18Ro",
+     "url": "https://www.youtube.com/watch?v=OnNScNC-I_8",
      "licence": "Creative Commons Attribution (CC BY)",
-     "author": "Woow Fit World",
+     "author": "David Spatz",
      "quality": 0.994,
      "stats": {
       "tracked": 100,
       "lagBefore": 40,
       "lagAfter": 0,
       "speedCap": 0,
-      "trackErrCm": 0.25
+      "trackErrCm": 0.23
      }
     },
     {
      "file": "media/demo/so101-lateral-raise/clip-2.mp4",
      "poster": "media/demo/so101-lateral-raise/clip-2.jpg",
+     "title": "Shoulder Exercises - Dumbbell Upright Shoulder External Rotation",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=IEnhviv4fcM",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Fitnessyard",
+     "quality": 0.994,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.19
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-3.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-3.jpg",
+     "title": "Band Scaption for Rotator Cuff Recruitment",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=k10BzEDvMwU",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Connor Naccarato",
+     "quality": 0.994,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.3
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-4.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-4.jpg",
+     "title": "side lateral raise dumbells",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=GzHSQUvVisw",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Fit Drona",
+     "quality": 0.993,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.27
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-5.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-5.jpg",
+     "title": "Pulley Shoulder Abduction - Improve Shoulder Mobility & Strength Safel",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=mC7PpULOtjQ",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Ott Physical Therapy",
+     "quality": 0.988,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.14
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-6.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-6.jpg",
+     "title": "Seated Shoulder Lateral Raise",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=ACGvX93__1k",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "David Kimmerle",
+     "quality": 0.987,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.21
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-7.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-7.jpg",
      "title": "Shoulder Exercises - Dumbbell Lateral Raise",
      "seconds": 6,
      "source": "YouTube, Creative Commons",
      "url": "https://www.youtube.com/watch?v=n3V4nh5G9AE",
      "licence": "Creative Commons Attribution (CC BY)",
      "author": "Fitnessyard",
-     "quality": 0.984,
+     "quality": 0.985,
      "stats": {
       "tracked": 96.7,
       "lagBefore": 40,
@@ -238,15 +597,33 @@
      }
     },
     {
-     "file": "media/demo/so101-lateral-raise/clip-3.mp4",
-     "poster": "media/demo/so101-lateral-raise/clip-3.jpg",
+     "file": "media/demo/so101-lateral-raise/clip-8.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-8.jpg",
+     "title": "20   Side Front Shoulder Raise HLF",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=wKaoT0sloQ4",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Higher Level Fitness",
+     "quality": 0.985,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.28
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-9.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-9.jpg",
      "title": "Dumbbell Lateral Raises",
      "seconds": 6,
      "source": "YouTube, Creative Commons",
      "url": "https://www.youtube.com/watch?v=WWhSHS2DrKQ",
      "licence": "Creative Commons Attribution (CC BY)",
      "author": "Coach Bobby Bluford",
-     "quality": 0.981,
+     "quality": 0.985,
      "stats": {
       "tracked": 100,
       "lagBefore": 40,
@@ -256,21 +633,219 @@
      }
     },
     {
-     "file": "media/demo/so101-lateral-raise/clip-4.mp4",
-     "poster": "media/demo/so101-lateral-raise/clip-4.jpg",
+     "file": "media/demo/so101-lateral-raise/clip-10.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-10.jpg",
+     "title": "Dumbbell Lateral Raise: Gym Shorts (How To)",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=TM6se0vr1VA",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Barbell Logic",
+     "quality": 0.984,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.22
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-11.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-11.jpg",
+     "title": "Dumbbell Double Frontal Raises (Deltoids)",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=w8hvSEkpa7E",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Coach Bobby Bluford",
+     "quality": 0.981,
+     "stats": {
+      "tracked": 89.7,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0.7,
+      "trackErrCm": 0.54
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-12.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-12.jpg",
+     "title": "Dumbbell Single Arm Alternating Frontal Raise",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=IEd4uKZ1oo8",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Coach Bobby Bluford",
+     "quality": 0.968,
+     "stats": {
+      "tracked": 91.7,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.45
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-13.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-13.jpg",
+     "title": "Single Arm DB Lateral Raise",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=NMDvGf65tqI",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Avid Fitness",
+     "quality": 0.965,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.14
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-14.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-14.jpg",
+     "title": "Benefits of Frontal Plane Control for Shoulder Pain Hip Pain Knee Pain",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=BOEKOkcULw0",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Mobility Plus Sports Rehab",
+     "quality": 0.963,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.85
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-15.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-15.jpg",
      "title": "DUMBBELL LATERAL RAISE",
      "seconds": 6,
      "source": "YouTube, Creative Commons",
      "url": "https://www.youtube.com/watch?v=BEgTlcf41QA",
      "licence": "Creative Commons Attribution (CC BY)",
      "author": "Aesthetics Trainer",
-     "quality": 0.922,
+     "quality": 0.937,
      "stats": {
       "tracked": 100,
       "lagBefore": 40,
       "lagAfter": 0,
       "speedCap": 0.7,
       "trackErrCm": 0.4
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-16.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-16.jpg",
+     "title": "CABLE LATERAL RAISE",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=axJI7XJycBo",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Aesthetics Trainer",
+     "quality": 0.93,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.25
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-17.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-17.jpg",
+     "title": "Shoulder Lateral Raise",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=mkFGCWTYK4E",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "David Kimmerle",
+     "quality": 0.904,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.24
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-18.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-18.jpg",
+     "title": "Bent over lateral raises",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=NmxS-Hu0H3M",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "P4P WORKOUTS",
+     "quality": 0.901,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.22
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-19.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-19.jpg",
+     "title": "Single Arm Cable Lateral Raise",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=J-6uEOkYAKM",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Avid Fitness",
+     "quality": 0.888,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.27
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-20.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-20.jpg",
+     "title": "Standing 4 Point Lateral Raise",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=v3YOWW1G0lU",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "Hybrid Fitness",
+     "quality": 0.878,
+     "stats": {
+      "tracked": 100,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 0,
+      "trackErrCm": 0.2
+     }
+    },
+    {
+     "file": "media/demo/so101-lateral-raise/clip-21.mp4",
+     "poster": "media/demo/so101-lateral-raise/clip-21.jpg",
+     "title": "Front Side Lateral Raise Superset",
+     "seconds": 6,
+     "source": "YouTube, Creative Commons",
+     "url": "https://www.youtube.com/watch?v=d5s5TLIJQ4g",
+     "licence": "Creative Commons Attribution (CC BY)",
+     "author": "David Kimmerle",
+     "quality": 0.87,
+     "stats": {
+      "tracked": 95.3,
+      "lagBefore": 40,
+      "lagAfter": 0,
+      "speedCap": 1,
+      "trackErrCm": 0.46
      }
     }
    ]
