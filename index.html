@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Player Two</title>
+  <meta name="description" content="Compose a robot training run in one sentence: pick a robot, describe the task, choose the data quality. Player Two turns video into retargeted demonstrations.">
+  <meta name="theme-color" content="#0b0614">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:title" content="Player Two">
+  <meta property="og:description" content="Compose a robot training run in one sentence.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230b0614'/%3E%3Ccircle cx='24' cy='32' r='9' fill='none' stroke='%23f7e3d3' stroke-width='4'/%3E%3Ccircle cx='42' cy='32' r='11' fill='%23ff5fa2'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hedvig+Letters+Serif:opsz@12..24&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="site.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <main class="stage">
+    <h1 class="sr-only">Player Two: compose a robot training run</h1>
+
+    <p class="eyebrow eyebrow--lead">Player Two · Train a robot from video</p>
+
+    <form class="composer" id="composer" novalidate autocomplete="off">
+      <p class="sentence" id="sentence">
+        I want to train <span id="article">a</span>
+        <span class="blank blank--robot" id="robot-blank"><span class="sizer" id="robot-sizer" aria-hidden="true">robot</span><input
+            id="robot" type="text" size="1" inputmode="text" enterkeyhint="next"
+            role="combobox" aria-label="Robot" aria-autocomplete="list" aria-haspopup="listbox"
+            aria-expanded="false" aria-controls="robot-list"
+            placeholder="robot" maxlength="60" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off"><button
+            type="button" class="chev" id="robot-chev" tabindex="-1" aria-label="Show robots"><svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 1.5 6 6l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span>
+        to
+        <span class="blank blank--task" id="task" contenteditable="true" role="textbox" aria-multiline="false"
+          aria-label="Task" aria-placeholder="Describe the task, for example: fold a t-shirt in half on a table"
+          data-placeholder="do the Renegade TikTok dance" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="next"></span>
+        with
+        <button type="button" class="blank blank--tier" id="tier" role="combobox" aria-label="Data quality"
+          aria-haspopup="listbox" aria-expanded="false" aria-controls="tier-list"><span id="tier-label">curated video</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 12 8"><path d="M1.5 1.5 6 6l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+        data.
+      </p>
+
+      <div class="spec" id="spec">
+        <div class="spec-top">
+          <span class="eyebrow eyebrow--sm">Specificity <span class="spec-score" id="spec-score">0/5</span></span>
+          <div class="meter" id="meter" role="meter" aria-label="Task specificity" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0" aria-valuetext="0 of 5">
+            <span class="seg" data-check="length"><i></i><b>Length</b></span>
+            <span class="seg" data-check="object"><i></i><b>Object</b></span>
+            <span class="seg" data-check="side"><i></i><b>Side</b></span>
+            <span class="seg" data-check="count"><i></i><b>Count</b></span>
+            <span class="seg" data-check="manner"><i></i><b>Manner</b></span>
+          </div>
+        </div>
+        <p class="spec-line">The more specific you are, the better the training data. <span class="spec-hint" id="spec-hint" role="status"></span></p>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="cta" id="compose" disabled aria-describedby="compose-hint">Compose run</button>
+        <p class="cta-hint" id="compose-hint">Choose a robot and describe the task.</p>
+      </div>
+    </form>
+
+    <section class="brief-wrap" id="brief-wrap" aria-labelledby="brief-title" inert>
+      <div class="brief-clip">
+        <article class="brief" id="brief" tabindex="-1">
+          <header class="brief-head">
+            <h2 class="eyebrow eyebrow--sm" id="brief-title">Run brief</h2>
+            <p class="brief-note">Nothing has been queued or trained. This is the brief.</p>
+          </header>
+
+          <p class="brief-sentence" id="brief-sentence"></p>
+
+          <dl class="brief-rows">
+            <div class="brief-row">
+              <dt>Robot</dt>
+              <dd>
+                <span class="brief-value" id="brief-robot"></span>
+                <span class="tag" id="brief-status"></span>
+                <p id="brief-robot-line"></p>
+              </dd>
+            </div>
+            <div class="brief-row">
+              <dt>Data</dt>
+              <dd>
+                <span class="brief-value" id="brief-tier"></span>
+                <span class="tag" id="brief-tier-tag"></span>
+                <p id="brief-tier-line"></p>
+              </dd>
+            </div>
+            <div class="brief-row">
+              <dt>Specificity</dt>
+              <dd>
+                <span class="brief-value" id="brief-spec"></span>
+                <p id="brief-spec-line"></p>
+              </dd>
+            </div>
+            <div class="brief-row" id="brief-run-row">
+              <dt>Run it</dt>
+              <dd>
+                <div class="cmd" id="cmd-block">
+                  <pre><code id="cmd"></code></pre>
+                  <button type="button" class="ghost ghost--sm" id="copy-cmd">Copy</button>
+                </div>
+                <p id="brief-operator-line">Operator sessions run in the teleoperation page of the Player Two app.</p>
+              </dd>
+            </div>
+          </dl>
+
+          <footer class="brief-actions">
+            <button type="button" class="ghost" id="copy-json">Copy brief as JSON</button>
+            <button type="button" class="ghost" id="copy-link">Copy link</button>
+          </footer>
+        </article>
+      </div>
+    </section>
+
+    <noscript><p class="noscript">This page needs JavaScript to compose a run.</p></noscript>
+  </main>
+
+  <footer class="foot">
+    <p>Player Two composes training runs. It produces retargeted demonstrations, it does not train a policy.</p>
+  </footer>
+
+  <div class="scrim" id="scrim"></div>
+  <div class="pop pop--robot" id="robot-list" role="listbox" aria-label="Robots"></div>
+  <div class="pop pop--tier" id="tier-list" role="listbox" aria-label="Data quality"></div>
+  <div class="sr-only" id="announce" aria-live="polite"></div>
+</body>
+</html>
