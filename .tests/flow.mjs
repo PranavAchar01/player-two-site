@@ -2,7 +2,7 @@
 // Run: node /Users/pranavachar/helloworld/player-two-site/.tests/flow.mjs
 import puppeteer from '/Users/pranavachar/helloworld/player-two/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js';
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,13 @@ const EXPECTED_ARTICLES = {
   'ANYmal': 'an', 'Hello Robot Stretch 3': 'a', 'PAL TIAGo': 'a'
 };
 
+// The recorded demos. Everything the page shows about them must come from this file.
+const MANIFEST_PATH = path.join(SITE, 'media/demo/manifest.json');
+const MANIFEST = existsSync(MANIFEST_PATH) ? JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) : null;
+const DEMOS = MANIFEST ? MANIFEST.demos : [];
+const tidy = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
+const hasClipFiles = (demo) => demo.clips.length > 0 && demo.clips.every((c) => existsSync(path.join(SITE, c.file)) && existsSync(path.join(SITE, c.poster)));
+
 mkdirSync(SHOTS, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
@@ -40,7 +47,7 @@ const eq = (name, got, want) => check(name, got === want, `got ${JSON.stringify(
 const server = spawn('python3', ['-m', 'http.server', String(PORT), '--bind', '127.0.0.1'], { cwd: SITE, stdio: 'ignore' });
 await sleep(900);
 
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--hide-scrollbars'] });
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--hide-scrollbars', '--autoplay-policy=no-user-gesture-required'] });
 try {
   await browser.defaultBrowserContext().overridePermissions(BASE.replace(/\/$/, ''), ['clipboard-read', 'clipboard-write']);
 } catch (e) {
@@ -58,6 +65,407 @@ const inViewport = (page, sel) => page.$eval(sel, (n) => {
   const r = n.getBoundingClientRect();
   return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), vw: document.documentElement.clientWidth, vh: window.innerHeight };
 });
+
+const until = async (page, fn, ms = 5000, ...args) => {
+  const started = Date.now();
+  while (Date.now() - started < ms) {
+    if (await page.evaluate(fn, ...args)) return Date.now() - started;
+    await sleep(60);
+  }
+  return -1;
+};
+
+const viewerState = (page) => page.evaluate(() => {
+  const v = document.getElementById('ql-video');
+  return {
+    open: document.getElementById('ql').dataset.open === 'true',
+    title: document.getElementById('ql-title').textContent,
+    count: document.getElementById('ql-count').textContent,
+    playing: !v.paused && v.currentTime > 0,
+    loop: v.loop,
+    muted: v.muted,
+    focusInside: document.getElementById('ql').contains(document.activeElement),
+    pageInert: document.getElementById('page').inert
+  };
+});
+
+// Chips, the recorded run, the library and the viewer. Everything expected here is read from the manifest.
+async function demoFlow(page, label, shot) {
+  if (!DEMOS.length) { notes.push(`${label}: media/demo/manifest.json is missing, demo checks skipped`); return; }
+  const mobile = label === 'mobile';
+  const mp4s = [];
+  page.on('request', (r) => { if (/\.mp4(\?|$)/.test(r.url())) mp4s.push(r.url()); });
+
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await sleep(1200);
+
+  // chips come from the manifest
+  const chips = await page.$$eval('#chips .chip', (ns) => ns.map((n) => n.textContent));
+  eq(`${label}: one chip per recorded demo`, chips.length, Math.min(DEMOS.length, 3));
+  DEMOS.slice(0, 3).forEach((demo, i) => {
+    const article = EXPECTED_ARTICLES[demo.robot];
+    if (article) eq(`${label}: chip ${i + 1} is built from the manifest`, chips[i], `Try: ${article} ${tidy(demo.robot)} to ${tidy(demo.task)}`);
+  });
+  check(`${label}: chips are at least 44px tall`, await page.$$eval('#chips .chip', (ns) => ns.every((n) => n.getBoundingClientRect().height >= 44)));
+
+  // underlines of the three blanks sit on the same rule, one border below the text
+  const gaps = await page.evaluate(() => ['robot-blank', 'tier'].map((id) => {
+    const box = document.getElementById(id);
+    const frame = box.getBoundingClientRect();
+    for (const node of [box.nextSibling, box.previousSibling]) {
+      if (!node || node.nodeType !== 3 || !node.textContent.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const r of range.getClientRects()) {
+        const mid = (r.top + r.bottom) / 2;
+        if (r.width > 0 && mid > frame.top && mid < frame.bottom) return Math.round((frame.bottom - r.bottom) * 100) / 100;
+      }
+    }
+    return null;
+  }));
+  check(`${label}: blank underlines are optically aligned`, gaps.every((g) => g === null || Math.abs(g - 1) <= 0.3), JSON.stringify(gaps));
+
+  // a chip types into all three blanks
+  const demo = DEMOS[DEMOS.length - 1];
+  const chipIndex = DEMOS.length - 1;
+  const before = await page.evaluate(() => document.getElementById('sentence').getBoundingClientRect().top);
+  await page.click(`#chips .chip:nth-child(${chipIndex + 1})`);
+  await sleep(180);
+  const midway = await page.evaluate(() => ({ robot: document.getElementById('robot').value, task: document.getElementById('task').textContent }));
+  check(`${label}: chip types instead of pasting`, midway.robot.length < tidy(demo.robot).length || midway.task.length < tidy(demo.task).length, JSON.stringify(midway));
+  const filled = await until(page, (robot, task) => document.getElementById('robot').value === robot && document.getElementById('task').textContent === task && !document.getElementById('compose').disabled, 6000, tidy(demo.robot), tidy(demo.task));
+  check(`${label}: chip fills robot and task`, filled >= 0, JSON.stringify(await page.evaluate(() => ({ robot: document.getElementById('robot').value, task: document.getElementById('task').textContent }))));
+  eq(`${label}: chip sets the tier`, await text(page, '#tier-label'), 'curated video');
+  eq(`${label}: chip keeps the sentence where it was`, await page.evaluate(() => document.getElementById('sentence').getBoundingClientRect().top), before);
+  let of = await overflow(page);
+  check(`${label}: no horizontal overflow (chip filled)`, of.doc <= 0 && of.body <= 0, JSON.stringify(of));
+  await sleep(400);
+  await shot('d-chip-filled');
+
+  // compose: the run timeline plays first
+  const composedAt = Date.now();
+  await page.click('#compose');
+  await sleep(700);
+  const playing = await page.evaluate(() => ({
+    runVisible: !document.getElementById('run-wrap').hidden,
+    briefOpen: document.getElementById('brief-wrap').classList.contains('is-open'),
+    outputOpen: document.getElementById('output').classList.contains('is-open'),
+    steps: [...document.querySelectorAll('#steps .step-name')].map((n) => n.textContent),
+    active: document.querySelectorAll('#steps .step.is-active').length,
+    resultsLocked: document.getElementById('results').inert && !document.getElementById('results').classList.contains('is-open'),
+    kicker: document.getElementById('run-kicker-text').textContent,
+    title: document.getElementById('run-title').textContent
+  }));
+  check(`${label}: a matched run opens the timeline, not the brief`, playing.runVisible && playing.outputOpen && !playing.briefOpen, JSON.stringify(playing));
+  eq(`${label}: six steps from the manifest`, playing.steps.join('|'), demo.steps.map((s) => tidy(s.name)).join('|'));
+  check(`${label}: one step is in progress and the library waits`, playing.active === 1 && playing.resultsLocked, JSON.stringify(playing));
+  check(`${label}: honest "Recorded run" label with the date`, /^Recorded run(, \d{1,2} [A-Z][a-z]+ \d{4})?$/.test(playing.kicker) && (!demo.recordedAt || /\d{4}$/.test(playing.kicker)), playing.kicker);
+  eq(`${label}: run title is the recorded sentence`, playing.title, `I want to train ${EXPECTED_ARTICLES[demo.robot] || 'a'} ${tidy(demo.robot)} to ${tidy(demo.task)} with curated video data.`);
+  await sleep(1500);
+  await shot('e-run-playing');
+  const statusMid = await text(page, '#step-status');
+  check(`${label}: status line quotes the agent's trace`, demo.steps.some((s) => statusMid.includes(tidy(s.detail).slice(0, 24))), statusMid);
+
+  const done = await until(page, () => document.getElementById('run-wrap').classList.contains('is-done'), 12000);
+  const total = Date.now() - composedAt;
+  check(`${label}: timeline takes about 6 to 8 seconds`, done >= 0 && total >= 5500 && total <= 9000, `${total} ms`);
+  await sleep(1500);
+  const after = await page.evaluate(() => ({
+    done: document.querySelectorAll('#steps .step.is-done').length,
+    tiles: document.querySelectorAll('#grid .tile').length,
+    visible: [...document.querySelectorAll('#grid .tile')].every((n) => Number(getComputedStyle(n).opacity) === 1),
+    stats: Object.fromEntries([...document.querySelectorAll('#stats .stat')].map((n) => [n.dataset.key, Number(n.querySelector('dd').textContent)])),
+    downloadDisabled: document.getElementById('download').disabled,
+    hint: document.getElementById('download-hint').textContent.replace(/\s+/g, ' ').trim(),
+    rejects: document.querySelectorAll('#rejects-list .reject').length,
+    rejectsHidden: document.getElementById('rejects').hidden,
+    lazy: [...document.querySelectorAll('#grid .tile img')].every((n) => n.loading === 'lazy'),
+    preload: [...document.querySelectorAll('#grid .tile video')].every((n) => n.preload === 'none' && !n.getAttribute('src')),
+    badges: [...document.querySelectorAll('#grid .pill--time')].map((n) => n.textContent),
+    words: document.getElementById('run-wrap').innerText
+  }));
+  eq(`${label}: every step ticked`, after.done, demo.steps.length);
+  eq(`${label}: one tile per clip in the manifest`, after.tiles, demo.clips.length);
+  check(`${label}: tiles have finished their entrance`, after.visible);
+  eq(`${label}: summary numbers are the manifest's`, JSON.stringify(after.stats), JSON.stringify({ found: demo.summary.found, judged: demo.summary.judged, accepted: demo.summary.accepted, rejected: demo.summary.rejected, episodes: demo.summary.episodes }));
+  check(`${label}: download is disabled and says why`, after.downloadDisabled && after.hint === 'Runs locally. See the brief.', after.hint);
+  check(`${label}: rejected strip follows the manifest`, after.rejects === (demo.rejections || []).length && after.rejectsHidden === !(demo.rejections || []).length, JSON.stringify({ rejects: after.rejects, hidden: after.rejectsHidden }));
+  check(`${label}: posters lazy-load and videos do not preload`, after.lazy && after.preload);
+  check(`${label}: duration badges`, after.badges.length === demo.clips.length && after.badges.every((b) => /^\d:\d\d$/.test(b)), after.badges.join(','));
+  check(`${label}: nothing claims a run was trained or queued`, !/\b(trained|queued|training (started|complete)|uploaded)\b/i.test(after.words), after.words.slice(0, 200));
+  eq(`${label}: no video was requested before a hover or open`, mp4s.length, 0);
+  of = await overflow(page);
+  check(`${label}: no horizontal overflow (results)`, of.doc <= 0 && of.body <= 0, JSON.stringify(of));
+  await page.evaluate(() => document.querySelector('#grid .tile').scrollIntoView({ block: 'center' }));
+  await sleep(500);
+  await shot('f-results');
+  await shot('f2-results-full', { fullPage: true });
+
+  const filesExist = hasClipFiles(demo);
+  if (!filesExist) notes.push(`${label}: clip files for ${demo.id} are missing, playback checks skipped`);
+
+  // hover peek (desktop)
+  if (!mobile && filesExist) {
+    await page.hover('#grid .tile:nth-child(1)');
+    await sleep(1500);
+    const peek = await page.evaluate(() => {
+      const tile = document.querySelector('#grid .tile');
+      const v = tile.querySelector('video');
+      return { lifted: tile.classList.contains('is-hover'), playing: !v.paused && v.currentTime > 0, shown: tile.classList.contains('is-playing'), muted: v.muted, scrub: getComputedStyle(tile.querySelector('.tile-scrub')).opacity };
+    });
+    check('desktop: hovering a tile lifts it and plays it muted in place', peek.lifted && peek.playing && peek.shown && peek.muted, JSON.stringify(peek));
+    await shot('g-hover');
+    if (demo.clips.length > 1) {
+      await page.hover('#grid .tile:nth-child(2)');
+      await sleep(1300);
+      const both = await page.$$eval('#grid .tile video', (vs) => vs.map((v) => !v.paused));
+      eq('desktop: only one video plays at a time', both.filter(Boolean).length, 1);
+      check('desktop: the second tile took over', both[1] === true && both[0] === false, JSON.stringify(both));
+    }
+    await page.mouse.move(6, 6);
+    await sleep(400);
+    eq('desktop: leaving the grid stops playback', (await page.$$eval('#grid .tile video', (vs) => vs.filter((v) => !v.paused).length)), 0);
+  }
+
+  // viewer by keyboard (desktop) or by touch (mobile)
+  const titles = demo.clips.map((c) => tidy(c.title));
+  if (!mobile) {
+    await page.focus('#grid .tile:nth-child(1)');
+    await page.keyboard.press('Enter');
+    await sleep(250);
+    await shot('h-viewer-opening');
+    await sleep(1300);
+    let v = await viewerState(page);
+    check('desktop: Enter on a tile opens the viewer', v.open && v.focusInside && v.pageInert, JSON.stringify(v));
+    eq('desktop: viewer shows the first clip', `${v.title}|${v.count}`, `${titles[0]}|1 of ${titles.length}`);
+    if (filesExist) check('desktop: viewer autoplays, muted and looping', v.playing && v.loop && v.muted, JSON.stringify(v));
+    const info = await page.evaluate(() => ({
+      href: document.getElementById('ql-source').getAttribute('href'), rel: document.getElementById('ql-source').rel,
+      licence: document.getElementById('ql-licence').textContent, author: document.getElementById('ql-author').textContent,
+      stats: [...document.querySelectorAll('#ql-stats .ql-stat')].map((n) => n.innerText.replace(/\s+/g, ' ').trim())
+    }));
+    const c0 = demo.clips[0];
+    check('desktop: viewer info comes from the manifest', info.href === c0.url && /noopener/.test(info.rel) && info.licence === tidy(c0.licence) && info.author === tidy(c0.author), JSON.stringify(info));
+    const s0 = c0.stats;
+    const wantStats = [`${s0.tracked} %`, `${s0.lagBefore} ms`, `${s0.lagAfter} ms`, `${s0.speedCap} %`].concat(s0.trackErrCm != null ? [`${s0.trackErrCm} cm`] : []);
+    check('desktop: measured stats are shown', wantStats.every((w) => info.stats.some((t) => t.includes(w))) && (s0.trackErrCm != null) === info.stats.some((t) => /Tracking error/.test(t)), JSON.stringify(info.stats));
+    of = await overflow(page);
+    check('desktop: no horizontal overflow (viewer)', of.doc <= 0 && of.body <= 0, JSON.stringify(of));
+    const fits = await page.evaluate(() => { const f = document.getElementById('ql-frame').getBoundingClientRect(); const m = document.getElementById('ql-media').getBoundingClientRect(); const i = document.getElementById('ql-info'); return f.top >= 0 && f.bottom <= window.innerHeight && m.left >= f.left && m.right <= f.right && m.top >= f.top && m.bottom <= f.bottom && i.scrollHeight <= i.clientHeight + 1; });
+    check('desktop: viewer fits the screen and nothing in it is cut off', fits);
+    await shot('i-viewer');
+
+    if (titles.length > 1) {
+      await page.keyboard.press('ArrowRight');
+      await sleep(800);
+      v = await viewerState(page);
+      eq('desktop: right arrow moves to the next clip', `${v.title}|${v.count}`, `${titles[1]}|2 of ${titles.length}`);
+      await shot('j-viewer-next');
+      await page.keyboard.press('ArrowLeft');
+      await sleep(700);
+      eq('desktop: left arrow moves back', (await viewerState(page)).title, titles[0]);
+      await page.keyboard.press('ArrowLeft');
+      await sleep(700);
+      eq('desktop: arrows wrap around', (await viewerState(page)).title, titles[titles.length - 1]);
+      await page.click('#ql-next');
+      await sleep(700);
+      eq('desktop: the on-screen arrow works too', (await viewerState(page)).title, titles[0]);
+    }
+    for (let i = 0; i < 6; i += 1) await page.keyboard.press('Tab');
+    check('desktop: Tab stays inside the viewer', (await viewerState(page)).focusInside);
+    await page.keyboard.press('Escape');
+    await sleep(900);
+    const closed = await page.evaluate(() => ({ open: document.getElementById('ql').dataset.open, visible: getComputedStyle(document.getElementById('ql')).visibility, inert: document.getElementById('page').inert, focus: document.activeElement.className, hiddenTiles: document.querySelectorAll('.tile.is-origin').length, playing: !document.getElementById('ql-video').paused, runStillDone: document.getElementById('run-wrap').classList.contains('is-done') }));
+    check('desktop: Escape closes the viewer and gives focus back to the tile', closed.open === 'false' && closed.visible === 'hidden' && !closed.inert && /tile/.test(closed.focus) && closed.hiddenTiles === 0 && !closed.playing && closed.runStillDone, JSON.stringify(closed));
+    await page.keyboard.press(' ');
+    await sleep(700);
+    check('desktop: Space on a tile opens the viewer', (await viewerState(page)).open);
+    await page.click('#ql-close');
+    await sleep(800);
+  } else {
+    await page.tap('#grid .tile:nth-child(1)');
+    await sleep(1500);
+    let v = await viewerState(page);
+    check('mobile: tap opens the viewer', v.open && v.title === titles[0], JSON.stringify(v));
+    if (filesExist) check('mobile: viewer autoplays', v.playing, JSON.stringify(v));
+    of = await overflow(page);
+    check('mobile: no horizontal overflow (viewer)', of.doc <= 0 && of.body <= 0, JSON.stringify(of));
+    await shot('i-viewer');
+    const box = await page.$eval('#ql-media', (n) => { const r = n.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    const swipe = async (dx, dy) => {
+      await page.touchscreen.touchStart(box.x, box.y);
+      for (let i = 1; i <= 6; i += 1) { await page.touchscreen.touchMove(box.x + (dx * i) / 6, box.y + (dy * i) / 6); await sleep(16); }
+      await page.touchscreen.touchEnd();
+    };
+    if (titles.length > 1) {
+      await swipe(-160, 4);
+      await sleep(900);
+      eq('mobile: swipe left moves to the next clip', (await viewerState(page)).title, titles[1]);
+      await swipe(160, -4);
+      await sleep(900);
+      eq('mobile: swipe right moves back', (await viewerState(page)).title, titles[0]);
+    }
+    await swipe(6, 60);
+    await sleep(600);
+    check('mobile: a short pull springs back', (await viewerState(page)).open);
+    await swipe(4, 240);
+    await sleep(900);
+    check('mobile: swipe down closes the viewer', !(await viewerState(page)).open && !(await page.$eval('#page', (n) => n.inert)));
+  }
+
+  // the brief is still one tap away
+  await page.click('#see-brief');
+  await sleep(900);
+  check(`${label}: "See the brief" opens the honest brief under the results`, await page.evaluate(() => document.getElementById('brief-wrap').classList.contains('is-open') && !document.getElementById('run-wrap').hidden && /Nothing has been queued or trained/.test(document.getElementById('brief').innerText)));
+  of = await overflow(page);
+  check(`${label}: no horizontal overflow (results and brief)`, of.doc <= 0 && of.body <= 0, JSON.stringify(of));
+
+  // editing the task away from the demo dims the recorded run; the next compose gives the brief
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.click('#task');
+  await page.evaluate(() => { const t = document.getElementById('task'); const r = document.createRange(); r.selectNodeContents(t); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); });
+  await page.keyboard.type('stack three red cups', { delay: 5 });
+  await sleep(200);
+  check(`${label}: a run that no longer matches is dimmed and locked`, await page.$eval('#run-wrap', (n) => n.classList.contains('is-stale') && n.inert));
+  await page.click('#compose');
+  await sleep(900);
+  check(`${label}: composing an unmatched task swaps the run for the brief`, await page.evaluate(() => document.getElementById('run-wrap').hidden && document.getElementById('brief-wrap').classList.contains('is-open') && /stack three red cups/.test(document.getElementById('cmd').textContent)));
+
+  // Escape and click both skip the timeline
+  if (DEMOS.length) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await sleep(200);
+    await page.click('#chips .chip:nth-child(1)');
+    await until(page, (task) => document.getElementById('task').textContent === task && !document.getElementById('compose').disabled, 6000, tidy(DEMOS[0].task));
+    await page.click('#compose');
+    await sleep(900);
+    await page.keyboard.press('Escape');
+    const skipped = await until(page, () => document.getElementById('run-wrap').classList.contains('is-done'), 600);
+    check(`${label}: Escape skips the timeline`, skipped >= 0 && skipped < 600, String(skipped));
+    eq(`${label}: skipping still shows every clip`, await page.$$eval('#grid .tile', (n) => n.length), DEMOS[0].clips.length);
+    await page.click('#compose');
+    await sleep(900);
+    await page.click('#steps');
+    const clicked = await until(page, () => document.getElementById('run-wrap').classList.contains('is-done'), 600);
+    check(`${label}: a click skips the timeline`, clicked >= 0, String(clicked));
+    await sleep(700);
+    await page.click('#steps .step:nth-child(2) .step-btn');
+    await sleep(400);
+    check(`${label}: a finished step can be read again`, (await text(page, '#step-status')).includes(tidy(DEMOS[0].steps[1].detail).slice(0, 24)), await text(page, '#step-status'));
+  }
+}
+
+// Reduced motion, the built-in stand-in, and the film driver. Desktop only.
+async function extras() {
+  console.log('\n=== extras ===');
+  const open = async (url, before) => {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+    const errors = [];
+    page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warn') errors.push(`${m.type()}: ${m.text()}`); });
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    if (before) await before(page);
+    await page.goto(url, { waitUntil: 'networkidle0' });
+    await page.evaluate(() => localStorage.clear());
+    await page.goto(url, { waitUntil: 'networkidle0' });
+    await sleep(800);
+    return { page, errors };
+  };
+
+  // reduced motion
+  if (DEMOS.length) {
+    const { page, errors } = await open(BASE, (p) => p.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]));
+    eq('reduced motion: no drift on the wallpaper', await page.$eval('.hero-img', (n) => getComputedStyle(n).animationName), 'none');
+    await page.click('#chips .chip:nth-child(1)');
+    await sleep(250);
+    eq('reduced motion: a chip fills at once', await page.evaluate(() => `${document.getElementById('robot').value}|${document.getElementById('task').textContent}`), `${tidy(DEMOS[0].robot)}|${tidy(DEMOS[0].task)}`);
+    await page.click('#compose');
+    await sleep(500);
+    check('reduced motion: the timeline still plays', await page.evaluate(() => document.querySelectorAll('#steps .step.is-active').length === 1));
+    await page.click('#run-skip');
+    await sleep(300);
+    check('reduced motion: tiles are simply there', await page.$$eval('#grid .tile', (ns) => ns.length > 0 && ns.every((n) => Number(getComputedStyle(n).opacity) === 1)));
+    await page.focus('#grid .tile:nth-child(1)');
+    await page.keyboard.press('Enter');
+    await sleep(200);
+    check('reduced motion: the viewer opens without a flight', await page.evaluate(() => document.getElementById('ql').dataset.open === 'true' && document.getElementById('ql-media').getAnimations().length === 0));
+    await page.keyboard.press('Escape');
+    await sleep(200);
+    check('reduced motion: the viewer closes at once', await page.evaluate(() => document.getElementById('ql').dataset.open === 'false' && !document.getElementById('page').inert));
+    check('reduced motion: no console errors', errors.length === 0, errors.join(' | '));
+    await page.screenshot({ path: path.join(SHOTS, 'desktop-k-reduced-motion.png') });
+    await page.close();
+  }
+
+  // no manifest: the stand-in keeps the page whole and says what it is
+  {
+    const { page, errors } = await open(BASE, async (p) => {
+      await p.setRequestInterception(true);
+      p.on('request', (r) => (/manifest\.json/.test(r.url()) ? r.respond({ status: 200, contentType: 'application/json', body: '{}' }) : r.continue()));
+    });
+    const chips = await page.$$eval('#chips .chip', (ns) => ns.map((n) => n.textContent));
+    check('stand-in: chips still appear without a manifest', chips.length === 2 && chips.every((c) => /^Try: an? /.test(c)), chips.join(' | '));
+    await page.click('#chips .chip:nth-child(1)');
+    await until(page, () => !document.getElementById('compose').disabled && document.getElementById('task').textContent.length > 10 && document.activeElement.id === 'compose', 6000);
+    await page.click('#compose');
+    await sleep(600);
+    await page.click('#run-skip');
+    await sleep(1200);
+    const standIn = await page.evaluate(() => ({ kicker: document.getElementById('run-kicker-text').textContent, tiles: document.querySelectorAll('#grid .tile.no-poster').length, status: document.getElementById('step-status').innerText }));
+    check('stand-in: it says no recorded run is loaded', /No recorded run is loaded/.test(standIn.kicker) && standIn.tiles === 3 && !/Recorded run,/.test(standIn.kicker), JSON.stringify(standIn));
+    await page.click('#grid .tile:nth-child(1)');
+    await sleep(900);
+    check('stand-in: the viewer opens on an empty clip without breaking', await page.evaluate(() => document.getElementById('ql').dataset.open === 'true' && !document.getElementById('ql-missing').hidden));
+    await page.screenshot({ path: path.join(SHOTS, 'desktop-l-stand-in.png') });
+    await page.keyboard.press('Escape');
+    await sleep(500);
+    check('stand-in: no console errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+
+  // film driver
+  {
+    const plain = await open(BASE);
+    await sleep(1400); // let the entrance finish, so the two layouts are compared at rest
+    const plainLayout = await plain.page.evaluate(() => ({ film: typeof window.filmDemo, h: document.documentElement.scrollHeight, s: JSON.stringify(document.getElementById('sentence').getBoundingClientRect()), c: JSON.stringify(document.getElementById('compose').getBoundingClientRect()) }));
+    eq('film: the driver is absent without ?film=1', plainLayout.film, 'undefined');
+    await plain.page.close();
+
+    const { page, errors } = await open(`${BASE}?film=1`);
+    await sleep(1400);
+    const filmLayout = await page.evaluate(() => ({ film: typeof window.filmDemo, cursor: Boolean(document.querySelector('.film-cursor')), h: document.documentElement.scrollHeight, s: JSON.stringify(document.getElementById('sentence').getBoundingClientRect()), c: JSON.stringify(document.getElementById('compose').getBoundingClientRect()) }));
+    check('film: ?film=1 exposes filmDemo and draws a cursor', filmLayout.film === 'function' && filmLayout.cursor, JSON.stringify(filmLayout));
+    check('film: film mode does not change layout', filmLayout.h === plainLayout.h && filmLayout.s === plainLayout.s && filmLayout.c === plainLayout.c, JSON.stringify({ filmLayout, plainLayout }));
+    if (DEMOS.length) {
+      const which = DEMOS.length - 1;
+      await page.evaluate(() => { window.__sfx = []; window.addEventListener('film:sfx', (e) => window.__sfx.push(e.detail)); });
+      const started = Date.now();
+      const running = page.evaluate((i) => window.filmDemo(i).then(() => 'done', (e) => `failed: ${e.message}`), which);
+      await sleep(5200);
+      await page.screenshot({ path: path.join(SHOTS, 'desktop-m-film-typing.png') });
+      const outcome = await running;
+      const seconds = Math.round((Date.now() - started) / 1000);
+      eq('film: filmDemo resolves', outcome, 'done');
+      const sfx = await page.evaluate(() => window.__sfx);
+      const counts = sfx.reduce((acc, e) => { acc[e.type] = (acc[e.type] || 0) + 1; return acc; }, {});
+      const demo = DEMOS[which];
+      check('film: every kind of sound cue is dispatched with a timestamp', ['key', 'click', 'open', 'close', 'tick', 'success', 'hover'].every((t) => counts[t] > 0) && sfx.every((e) => typeof e.t === 'number'), JSON.stringify(counts));
+      check('film: one tick per step and one success', counts.tick === demo.steps.length && counts.success === 1, JSON.stringify(counts));
+      const keys = sfx.filter((e) => e.type === 'key').map((e) => e.t);
+      const gapsMs = keys.slice(1).map((t, i) => t - keys[i]).filter((g) => g < 400);
+      const mean = gapsMs.reduce((a, b) => a + b, 0) / gapsMs.length;
+      check('film: typing is human paced', keys.length >= tidy(demo.task).length && mean > 45 && mean < 140 && new Set(gapsMs.map((g) => Math.round(g / 8))).size > 3, `mean ${Math.round(mean)} ms over ${keys.length} keys`);
+      const end = await page.evaluate(() => ({ robot: document.getElementById('robot').value, task: document.getElementById('task').textContent, viewer: document.getElementById('ql').dataset.open, done: document.getElementById('run-wrap').classList.contains('is-done'), tiles: document.querySelectorAll('#grid .tile').length }));
+      check('film: the take ends on the results with the viewer closed', end.robot === tidy(demo.robot) && end.task === tidy(demo.task) && end.viewer === 'false' && end.done && end.tiles === demo.clips.length, JSON.stringify(end));
+      notes.push(`film: filmDemo(${which}) ran for ${seconds} s and dispatched ${sfx.length} cues (${JSON.stringify(counts)})`);
+      await page.screenshot({ path: path.join(SHOTS, 'desktop-n-film-end.png') });
+    }
+    check('film: no console errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+}
 
 async function run(label, viewport) {
   console.log(`\n=== ${label} ${viewport.width}x${viewport.height} ===`);
@@ -79,7 +487,17 @@ async function run(label, viewport) {
 
   // (a) empty state
   eq(`${label}: title`, await page.title(), 'Player Two');
-  eq(`${label}: eyebrow`, await text(page, '.eyebrow--lead'), 'PLAYER TWO · TRAIN A ROBOT FROM VIDEO');
+  eq(`${label}: wordmark`, await text(page, '.wordmark'), 'Player Two');
+  eq(`${label}: tagline is sentence case`, await text(page, '.hero-tag'), 'Train a robot from video');
+  eq(`${label}: specificity copy`, await text(page, '.spec-line'), 'The more specific you are, the better the training data. Start with a verb and an object.');
+  const hero = await page.evaluate(() => {
+    const panel = document.getElementById('hero');
+    const r = panel.getBoundingClientRect();
+    const s = getComputedStyle(panel);
+    return { left: r.left, right: document.documentElement.clientWidth - r.right, top: r.top, ratio: r.height / window.innerHeight, radius: s.borderTopLeftRadius, bottomRadius: s.borderBottomLeftRadius, image: getComputedStyle(document.querySelector('.hero-img')).backgroundImage, grain: getComputedStyle(document.querySelector('.grain')).opacity };
+  });
+  check(`${label}: hero panel is inset 16 to 24px with 24px top corners`, hero.left >= 16 && hero.left <= 24 && hero.right >= 16 && hero.right <= 24 && hero.top >= 16 && hero.top <= 24 && hero.radius === '24px' && hero.bottomRadius === '0px', JSON.stringify(hero));
+  check(`${label}: hero is at least 78vh and carries the wallpaper and grain`, hero.ratio >= 0.779 && /wallpaper-hero\.jpg/.test(hero.image) && Number(hero.grain) === 0.25, JSON.stringify(hero));
   eq(`${label}: footer`, await text(page, '.foot p'), 'Player Two composes training runs. It produces retargeted demonstrations, it does not train a policy.');
   eq(`${label}: button disabled before input`, await page.$eval('#compose', (b) => b.disabled), true);
   eq(`${label}: button label`, await text(page, '#compose'), 'Compose run');
@@ -98,7 +516,7 @@ async function run(label, viewport) {
 
   // (b) robot list
   await page.click('#robot');
-  await sleep(350);
+  await sleep(700);
   eq(`${label}: robot list opens on click`, await page.$eval('#robot', (n) => n.getAttribute('aria-expanded')), 'true');
   eq(`${label}: robot option count`, await page.$$eval('#robot-list [role=option]', (n) => n.length), 37);
   eq(`${label}: exactly three live robots`, (await page.$$eval('#robot-list [role=option]', (ns) => ns.filter((n) => n.querySelector('.tag').textContent === 'live').map((n) => n.querySelector('.opt-name').textContent))).join('|'), 'SO-101|Franka Panda|Unitree G1');
@@ -106,6 +524,12 @@ async function run(label, viewport) {
   let box = await inViewport(page, '#robot-list');
   check(`${label}: robot list inside viewport`, box.left >= 0 && box.right <= box.vw && box.bottom <= box.vh + 1, JSON.stringify(box));
   await shot('b-robot-list');
+  if (label === 'mobile') {
+    eq('mobile: robot list is a bottom sheet', await page.$eval('#robot-list', (n) => { const s = getComputedStyle(n); return `${s.position} ${Math.round(window.innerHeight - n.getBoundingClientRect().bottom)}`; }), 'fixed 0');
+  } else {
+    eq('desktop: robot menu grows out of its anchor', await page.$eval('#robot-list', (n) => getComputedStyle(n).transformOrigin.split(' ')[1]), '0px');
+  }
+  check(`${label}: options are at least 44px tall`, await page.$$eval('#robot-list [role=option]', (ns) => ns.every((n) => n.getBoundingClientRect().height >= 44)));
 
   await page.keyboard.type('so', { delay: 40 });
   await sleep(250);
@@ -146,7 +570,7 @@ async function run(label, viewport) {
 
   // tier
   await page.click('#tier');
-  await sleep(450);
+  await sleep(700);
   eq(`${label}: tier list open`, await page.$eval('#tier', (n) => n.getAttribute('aria-expanded')), 'true');
   eq(`${label}: tier options`, (await page.$$eval('#tier-list [role=option]', (ns) => ns.map((n) => `${n.querySelector('.opt-title').textContent}/${n.querySelector('.tag').textContent}`))).join('|'), 'Operator-grade/Tier 1|Curated video/Tier 2|Open web video/Tier 3');
   box = await inViewport(page, '#tier-list');
@@ -164,7 +588,8 @@ async function run(label, viewport) {
   await sleep(1300);
   eq(`${label}: brief open`, await page.$eval('#brief-wrap', (n) => n.classList.contains('is-open') && !n.inert), true);
   eq(`${label}: brief sentence`, await text(page, '#brief-sentence'), `I want to train an SO-101 to ${TASK} with curated video data.`);
-  eq(`${label}: brief status`, await text(page, '#brief-status'), 'LIVE');
+  eq(`${label}: brief status`, await text(page, '#brief-status'), 'Live');
+  eq(`${label}: an unmatched run shows the brief, not a run`, await page.$eval('#run-wrap', (n) => n.hidden), true);
   eq(`${label}: brief robot line`, await text(page, '#brief-robot-line'), 'Runs today.');
   eq(`${label}: exact command`, await page.$eval('#cmd', (n) => n.textContent), `pnpm dlx tsx scripts/agent/agent.mts "${TASK}" --robot so101 --max-videos 8 --seconds 6`);
   eq(`${label}: operator line hidden for tier 2`, await page.$eval('#brief-operator-line', (n) => n.hidden), true);
@@ -219,7 +644,7 @@ async function run(label, viewport) {
   await page.keyboard.press('Enter');
   await sleep(250);
   eq(`${label}: planned robot picked`, await page.$eval('#robot', (n) => n.value), 'Boston Dynamics Spot');
-  eq(`${label}: planned status`, await text(page, '#brief-status'), 'PLANNED');
+  eq(`${label}: planned status`, await text(page, '#brief-status'), 'Planned');
   eq(`${label}: planned line`, await text(page, '#brief-robot-line'), 'Not wired up yet. The brief is saved for when it is.');
   eq(`${label}: planned hides run row`, await page.$eval('#brief-run-row', (n) => n.hidden), true);
   of = await overflow(page);
@@ -230,10 +655,10 @@ async function run(label, viewport) {
   await sleep(180);
   await page.keyboard.type('Zorg 9', { delay: 20 });
   await sleep(200);
-  eq(`${label}: custom option offered`, (await page.$$eval('#robot-list [role=option]', (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ').trim()))).join('|'), 'Use "Zorg 9" CUSTOM');
+  eq(`${label}: custom option offered`, (await page.$$eval('#robot-list [role=option]', (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ').trim()))).join('|'), 'Use "Zorg 9" Custom');
   await page.keyboard.press('Enter');
   await sleep(250);
-  eq(`${label}: custom status`, await text(page, '#brief-status'), 'CUSTOM');
+  eq(`${label}: custom status`, await text(page, '#brief-status'), 'Custom');
   eq(`${label}: custom sentence`, await text(page, '#brief-sentence'), `I want to train a Zorg 9 to ${TASK} with operator-grade data.`);
 
   // Escape and click outside
@@ -279,7 +704,7 @@ async function run(label, viewport) {
   for (let i = 0; i < 3; i += 1) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement.id)); }
   eq(`${label}: tab order`, order.join('>'), 'robot>task>tier>compose');
   const ring = await page.evaluate(() => { const s = getComputedStyle(document.activeElement); return `${s.outlineStyle} ${s.outlineColor}`; });
-  eq(`${label}: pink focus ring on button`, ring, 'solid rgb(255, 95, 162)');
+  eq(`${label}: accent focus ring on button`, ring, 'solid rgb(127, 178, 255)');
 
   // shareable URL
   await page.goto(`${BASE}?robot=Unitree%20G1&task=wave%20hello%20with%20its%20hand&tier=3`, { waitUntil: 'networkidle0' });
@@ -310,6 +735,8 @@ async function run(label, viewport) {
     await page.emulateMediaFeatures([]);
   }
 
+  await demoFlow(page, label, shot);
+
   check(`${label}: no console errors or warnings`, errors.length === 0, errors.join(' | '));
   check(`${label}: no requests beyond Google Fonts`, foreign.length === 0, foreign.join(' | '));
   await page.close();
@@ -318,6 +745,7 @@ async function run(label, viewport) {
 try {
   await run('desktop', { width: 1440, height: 900, deviceScaleFactor: 1 });
   await run('mobile', { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await extras();
 } catch (e) {
   failures += 1;
   console.log(`CRASH ${e.stack}`);
