@@ -31,6 +31,31 @@ const DEMOS = MANIFEST ? MANIFEST.demos : [];
 const tidy = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
 const hasClipFiles = (demo) => demo.clips.length > 0 && demo.clips.every((c) => existsSync(path.join(SITE, c.file)) && existsSync(path.join(SITE, c.poster)));
 
+const GRIPPER_CAVEAT = 'The gripper cannot be learned from video yet, so only the arm path is captured.';
+const JACKS_REFUSAL = 'An SO-101 is one arm. Jumping jacks need two arms and legs. Try a humanoid, or ask for a one-arm motion.';
+
+// Leaving a tile or the viewer cancels that clip's download on purpose. That is not an error.
+const isCancelledClip = (r) => /\.mp4(\?|$)/.test(r.url()) && r.failure() && r.failure().errorText === 'net::ERR_ABORTED';
+
+// A temporary manifest for the big-library checks: the real demos with their clips repeated up to 24.
+// It only ever exists in memory, served by request interception.
+const BIG = MANIFEST ? JSON.parse(JSON.stringify(MANIFEST)) : null;
+if (BIG) {
+  for (const demo of BIG.demos) {
+    const base = demo.clips;
+    demo.clips = Array.from({ length: 24 }, (_, i) => ({ ...base[i % base.length], title: `${tidy(base[i % base.length].title)} (${i + 1})` }));
+    demo.summary = { ...demo.summary, accepted: 24, episodes: 24 };
+  }
+}
+
+// A manifest whose demo makes no sense for its robot. The page must refuse it rather than play it.
+const NONSENSE = MANIFEST ? { demos: [{ ...MANIFEST.demos[0], id: 'nonsense', robot: 'SO-101', robotId: 'so101', task: 'do jumping jacks', match: ['jumping jacks'] }] } : null;
+
+const serveManifest = async (page, manifest) => {
+  await page.setRequestInterception(true);
+  page.on('request', (r) => (/media\/demo\/manifest\.json/.test(r.url()) ? r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(manifest) }) : r.continue()));
+};
+
 mkdirSync(SHOTS, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
@@ -366,6 +391,7 @@ async function extras() {
     const errors = [];
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warn') errors.push(`${m.type()}: ${m.text()}`); });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    page.on('requestfailed', (r) => { if (!isCancelledClip(r)) errors.push(`requestfailed: ${r.url()}`); });
     if (before) await before(page);
     await page.goto(url, { waitUntil: 'networkidle0' });
     await page.evaluate(() => localStorage.clear());
@@ -433,14 +459,14 @@ async function extras() {
     eq('film: the driver is absent without ?film=1', plainLayout.film, 'undefined');
     await plain.page.close();
 
-    const { page, errors } = await open(`${BASE}?film=1`);
+    const { page, errors } = await open(`${BASE}?film=1`, BIG ? (p) => serveManifest(p, BIG) : null);
     await sleep(1400);
     const filmLayout = await page.evaluate(() => ({ film: typeof window.filmDemo, cursor: Boolean(document.querySelector('.film-cursor')), h: document.documentElement.scrollHeight, s: JSON.stringify(document.getElementById('sentence').getBoundingClientRect()), c: JSON.stringify(document.getElementById('compose').getBoundingClientRect()) }));
     check('film: ?film=1 exposes filmDemo and draws a cursor', filmLayout.film === 'function' && filmLayout.cursor, JSON.stringify(filmLayout));
     check('film: film mode does not change layout', filmLayout.h === plainLayout.h && filmLayout.s === plainLayout.s && filmLayout.c === plainLayout.c, JSON.stringify({ filmLayout, plainLayout }));
     if (DEMOS.length) {
       const which = DEMOS.length - 1;
-      await page.evaluate(() => { window.__sfx = []; window.addEventListener('film:sfx', (e) => window.__sfx.push(e.detail)); });
+      await page.evaluate(() => { window.__sfx = []; window.__maxY = 0; window.__openY = 0; window.addEventListener('film:sfx', (e) => { window.__sfx.push(e.detail); if (e.detail.type === 'open') window.__openY = window.scrollY; }); setInterval(() => { window.__maxY = Math.max(window.__maxY, window.scrollY); }, 80); });
       const started = Date.now();
       const running = page.evaluate((i) => window.filmDemo(i).then(() => 'done', (e) => `failed: ${e.message}`), which);
       await sleep(5200);
@@ -450,7 +476,7 @@ async function extras() {
       eq('film: filmDemo resolves', outcome, 'done');
       const sfx = await page.evaluate(() => window.__sfx);
       const counts = sfx.reduce((acc, e) => { acc[e.type] = (acc[e.type] || 0) + 1; return acc; }, {});
-      const demo = DEMOS[which];
+      const demo = (BIG || MANIFEST).demos[which];
       check('film: every kind of sound cue is dispatched with a timestamp', ['key', 'click', 'open', 'close', 'tick', 'success', 'hover'].every((t) => counts[t] > 0) && sfx.every((e) => typeof e.t === 'number'), JSON.stringify(counts));
       check('film: one tick per step and one success', counts.tick === demo.steps.length && counts.success === 1, JSON.stringify(counts));
       const keys = sfx.filter((e) => e.type === 'key').map((e) => e.t);
@@ -459,10 +485,328 @@ async function extras() {
       check('film: typing is human paced', keys.length >= tidy(demo.task).length && mean > 45 && mean < 140 && new Set(gapsMs.map((g) => Math.round(g / 8))).size > 3, `mean ${Math.round(mean)} ms over ${keys.length} keys`);
       const end = await page.evaluate(() => ({ robot: document.getElementById('robot').value, task: document.getElementById('task').textContent, viewer: document.getElementById('ql').dataset.open, done: document.getElementById('run-wrap').classList.contains('is-done'), tiles: document.querySelectorAll('#grid .tile').length }));
       check('film: the take ends on the results with the viewer closed', end.robot === tidy(demo.robot) && end.task === tidy(demo.task) && end.viewer === 'false' && end.done && end.tiles === demo.clips.length, JSON.stringify(end));
+      const travel = await page.evaluate(() => ({ max: window.__maxY, open: window.__openY }));
+      check('film: the take scrolls down through the library and comes back before opening a clip', travel.max - travel.open > 200, JSON.stringify(travel));
       notes.push(`film: filmDemo(${which}) ran for ${seconds} s and dispatched ${sfx.length} cues (${JSON.stringify(counts)})`);
       await page.screenshot({ path: path.join(SHOTS, 'desktop-n-film-end.png') });
     }
     check('film: no console errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+}
+
+const fitState = (page) => page.evaluate(() => {
+  const fit = document.getElementById('fit');
+  return {
+    level: fit.dataset.level,
+    shown: fit.classList.contains('is-on'),
+    height: Math.round(fit.getBoundingClientRect().height),
+    line: document.getElementById('fit-line').textContent,
+    actions: [...document.querySelectorAll('#fit-actions button')].map((n) => n.textContent),
+    composeDisabled: document.getElementById('compose').disabled
+  };
+});
+
+// Verdicts for robot and task pairs, straight from the URL. [robot, task, level, a fragment of the line]
+const FIT_CASES = [
+  ['SO-101', 'do jumping jacks', 'refuse', JACKS_REFUSAL],
+  ['Franka Panda', 'clap twice', 'refuse', 'Clapping needs two hands'],
+  ['UR5e', 'fold a t-shirt in half on a table', 'refuse', 'Folding needs two hands'],
+  ['xArm 7', 'open a jar of jam', 'refuse', 'Opening a jar needs two hands'],
+  ['Koch v1.1', 'walk to the door', 'refuse', 'Walking and running need legs'],
+  ['SO-100', 'do the Renegade TikTok dance', 'refuse', 'A dance needs two arms, legs and a torso'],
+  ['Sawyer', 'lift the barbell overhead', 'refuse', 'A barbell needs two hands'],
+  ['SO-101', 'hold the cup with both hands', 'refuse', 'This task asks for two hands'],
+  ['ALOHA (bimanual)', 'fold a towel in half', 'ok', ''],
+  ['ALOHA (bimanual)', 'do ten squats', 'refuse', 'An ALOHA (bimanual) is two arms on a fixed base.'],
+  ['SO-101', 'follow a dumbbell lateral raise', 'ok', ''],
+  ['SO-101', 'pick up the red cup', 'warn', GRIPPER_CAVEAT],
+  ['Franka Panda', 'pour water into the glass', 'warn', GRIPPER_CAVEAT],
+  ['Unitree G1', 'do jumping jacks', 'ok', ''],
+  ['Unitree G1', 'do a dumbbell shoulder press', 'ok', ''],
+  ['Unitree G1', 'play the piano with its right hand', 'warn', 'Fingers cannot be learned from video yet, so only the arm and body path is captured.'],
+  ['Unitree H1', 'pick up the box', 'warn', 'Hands cannot be learned from video yet'],
+  ['LEAP Hand', 'do a squat', 'refuse', 'A LEAP Hand is fingers only.'],
+  ['Unitree Go2', 'wave hello', 'refuse', 'A Unitree Go2 is legs and no arms.'],
+  ['Unitree Go2', 'walk in a circle', 'ok', ''],
+  ['Boston Dynamics Spot', 'pick up the ball', 'warn', GRIPPER_CAVEAT],
+  ['Hello Robot Stretch 3', 'do jumping jacks', 'refuse', 'A Hello Robot Stretch 3 is one arm on a wheeled base.'],
+  ['Zorg 9', 'do jumping jacks', 'ok', '']
+];
+
+// The sentence has to make sense: refusals, caveats, and what the brief and the demos do about them.
+async function fitFlow(page, label, shot) {
+  const go = async (robot, task) => {
+    await page.goto(`${BASE}?robot=${encodeURIComponent(robot)}&task=${encodeURIComponent(task)}&tier=curated-video`, { waitUntil: 'networkidle0' });
+    await sleep(500);
+  };
+
+  if (label === 'desktop') {
+    const wrong = [];
+    for (const [robot, task, level, fragment] of FIT_CASES) {
+      await page.goto(`${BASE}?robot=${encodeURIComponent(robot)}&task=${encodeURIComponent(task)}`, { waitUntil: 'domcontentloaded' });
+      const got = await fitState(page);
+      if (got.level !== level || (level !== 'ok' && !got.line.includes(fragment)) || (level === 'ok' && got.shown)) wrong.push(`${robot} / ${task}: ${got.level} "${got.line}"`);
+    }
+    check(`desktop: ${FIT_CASES.length} robot and task pairs get the right verdict`, wrong.length === 0, wrong.join(' ; '));
+  }
+
+  // not runnable
+  await go('SO-101', 'do jumping jacks');
+  let fit = await fitState(page);
+  eq(`${label}: a one-arm robot refuses jumping jacks, in words`, fit.line, JACKS_REFUSAL);
+  check(`${label}: the refusal is a visible quiet line with two suggestions`, fit.level === 'refuse' && fit.shown && fit.height > 40 && fit.actions.join('|') === 'Switch to Unitree G1|Make it one arm', JSON.stringify(fit));
+  eq(`${label}: Compose run stays enabled when not runnable`, fit.composeDisabled, false);
+  const tone = await page.evaluate(() => ({ text: getComputedStyle(document.getElementById('fit-line')).fontSize, copy: getComputedStyle(document.querySelector('.spec-line')).fontSize, dot: getComputedStyle(document.getElementById('fit-line'), '::before').backgroundColor }));
+  check(`${label}: same type scale as the line above, red only on the dot`, tone.text === tone.copy && tone.dot === 'rgb(229, 138, 132)', JSON.stringify(tone));
+  let of = await overflow(page);
+  check(`${label}: no horizontal overflow (not runnable)`, of.doc <= 0 && of.body <= 0, JSON.stringify(of));
+  await sleep(1600);
+  await shot('o-not-runnable');
+
+  // "Make it one arm" offers an example and rewrites nothing until asked
+  await page.click('#fit-actions button:nth-child(2)');
+  await sleep(450);
+  fit = await fitState(page);
+  check(`${label}: "Make it one arm" offers an example and leaves the task alone`, /^A one-arm version could be: ".+"\.$/.test(fit.line) && fit.actions[0] === 'Use this example' && (await page.$eval('#task', (n) => n.textContent)) === 'do jumping jacks', JSON.stringify(fit));
+  await shot('o2-one-arm-example');
+  await page.click('#fit-actions button:nth-child(1)');
+  await sleep(500);
+  fit = await fitState(page);
+  check(`${label}: using the example makes the run fine again and folds the line away`, fit.level === 'ok' && !fit.shown && fit.height === 0 && /arm/.test(await page.$eval('#task', (n) => n.textContent)), JSON.stringify(fit));
+
+  // the brief leads with the refusal and never shows a command
+  await go('SO-101', 'do jumping jacks');
+  await page.click('#compose');
+  await sleep(1300);
+  const refused = await page.evaluate(() => ({
+    title: document.getElementById('brief-title').textContent,
+    first: document.getElementById('brief').innerText.trim().split('\n')[0],
+    why: document.getElementById('brief-fit-row').hidden ? '' : document.getElementById('brief-fit-row').innerText.replace(/\s+/g, ' ').trim(),
+    runRow: document.getElementById('brief-run-row').hidden,
+    cmd: document.getElementById('cmd').textContent,
+    runHidden: document.getElementById('run-wrap').hidden,
+    words: document.getElementById('brief').innerText
+  }));
+  check(`${label}: the brief leads with "Not runnable on this robot"`, refused.title === 'Not runnable on this robot' && refused.first === 'Not runnable on this robot' && refused.why === `Why not ${JACKS_REFUSAL}`, JSON.stringify(refused));
+  check(`${label}: a refused brief never shows a command`, refused.runRow && refused.cmd === '' && !/pnpm|agent\.mts/.test(refused.words) && refused.runHidden, JSON.stringify(refused));
+  await page.evaluate(() => document.getElementById('brief').scrollIntoView({ block: 'center' }));
+  await sleep(400);
+  await shot('o3-not-runnable-brief');
+  try {
+    await page.click('#copy-json');
+    await sleep(200);
+    const copied = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+    check(`${label}: the JSON brief says it is not runnable`, copied.runnable === false && copied.note === JACKS_REFUSAL, JSON.stringify(copied));
+  } catch (e) {
+    notes.push(`${label}: clipboard read-back of the refused brief not verified (${e.message})`);
+  }
+
+  // one click to a robot that can do it
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await sleep(300);
+  await page.click('#fit-actions button:nth-child(1)');
+  await sleep(600);
+  fit = await fitState(page);
+  check(`${label}: "Switch to Unitree G1" changes the robot and clears the refusal`, (await page.$eval('#robot', (n) => n.value)) === 'Unitree G1' && fit.level === 'ok' && !fit.shown && (await page.$eval('#brief-title', (n) => n.textContent)) === 'Run brief', JSON.stringify(fit));
+
+  // caveat: runnable, said plainly
+  await go('SO-101', 'pick up the red cup with its left hand, twice, slowly');
+  fit = await fitState(page);
+  check(`${label}: a grasp on an arm is runnable with the gripper caveat`, fit.level === 'warn' && fit.shown && fit.line === GRIPPER_CAVEAT && fit.actions.length === 0, JSON.stringify(fit));
+  eq(`${label}: the caveat dot is the accent, not red`, await page.evaluate(() => getComputedStyle(document.getElementById('fit-line'), '::before').backgroundColor), 'rgb(127, 178, 255)');
+  await sleep(1600);
+  await shot('p-caveat');
+  await page.click('#compose');
+  await sleep(1300);
+  const warned = await page.evaluate(() => ({ title: document.getElementById('brief-title').textContent, row: document.getElementById('brief-fit-row').innerText.replace(/\s+/g, ' ').trim(), cmd: document.getElementById('cmd').textContent }));
+  check(`${label}: the brief carries the caveat and still shows the command`, warned.title === 'Run brief' && warned.row === `Caveat ${GRIPPER_CAVEAT}` && /--robot so101/.test(warned.cmd), JSON.stringify(warned));
+
+  // the line waits for a pause in typing, then eases open; the sentence never moves
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(`${BASE}?robot=SO-101`, { waitUntil: 'networkidle0' });
+  await sleep(1600);
+  const sentenceTop = await page.evaluate(() => document.getElementById('sentence').getBoundingClientRect().top);
+  await page.click('#task');
+  await page.keyboard.type('do jumping jacks', { delay: 12 });
+  const early = await fitState(page);
+  await sleep(900);
+  const late = await fitState(page);
+  check(`${label}: the verdict is live but the line waits for a pause`, early.level === 'refuse' && !early.shown && late.shown && late.line === JACKS_REFUSAL, JSON.stringify({ early, late }));
+  eq(`${label}: the sentence does not move when the line appears`, await page.evaluate(() => document.getElementById('sentence').getBoundingClientRect().top), sentenceTop);
+}
+
+// A recorded demo that makes no sense for its robot must not play.
+async function nonsense() {
+  if (!NONSENSE) return;
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  await serveManifest(page, NONSENSE);
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(BASE, { waitUntil: 'networkidle0' });
+  await sleep(800);
+  await page.click('#chips .chip:nth-child(1)');
+  await until(page, () => document.getElementById('task').textContent === 'do jumping jacks' && document.activeElement.id === 'compose', 6000);
+  await page.click('#compose');
+  await sleep(1200);
+  const got = await page.evaluate(() => ({ run: !document.getElementById('run-wrap').hidden, brief: document.getElementById('brief-wrap').classList.contains('is-open'), title: document.getElementById('brief-title').textContent, tiles: document.querySelectorAll('#grid .tile').length }));
+  check('nonsense demo: a recorded demo never plays for a robot that cannot do the task', !got.run && got.brief && got.title === 'Not runnable on this robot' && got.tiles === 0, JSON.stringify(got));
+  await page.close();
+}
+
+// Twenty-four clips: columns, gaps, stillness, the sticky summary, keyboard, one download at a time.
+async function library() {
+  if (!BIG) { notes.push('library: no manifest, 24 clip checks skipped'); return; }
+  console.log('\n=== library of 24 ===');
+  await nonsense();
+  const sizes = [
+    ['desktop', { width: 1440, height: 900, deviceScaleFactor: 1 }, 4],
+    ['laptop', { width: 1280, height: 800, deviceScaleFactor: 1 }, 4],
+    ['wide', { width: 1920, height: 1080, deviceScaleFactor: 1 }, 5],
+    ['mobile', { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true }, 2]
+  ];
+  for (const [label, viewport, wantCols] of sizes) {
+    const page = await browser.newPage();
+    await page.setViewport(viewport);
+    const errors = [];
+    const live = new Set();
+    let mostAtOnce = 0;
+    page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warn') errors.push(`${m.type()}: ${m.text()}`); });
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    await serveManifest(page, BIG);
+    page.on('request', (r) => { if (/\.mp4(\?|$)/.test(r.url())) { live.add(r); mostAtOnce = Math.max(mostAtOnce, live.size); } });
+    page.on('requestfinished', (r) => live.delete(r));
+    page.on('requestfailed', (r) => { live.delete(r); if (!isCancelledClip(r)) errors.push(`requestfailed: ${r.url()}`); });
+
+    await page.goto(BASE, { waitUntil: 'networkidle0' });
+    await page.evaluate(() => localStorage.clear());
+    await page.goto(BASE, { waitUntil: 'networkidle0' });
+    await sleep(700);
+    await page.click('#chips .chip:nth-child(1)');
+    await until(page, () => !document.getElementById('compose').disabled && document.activeElement.id === 'compose', 6000);
+    await page.click('#compose');
+    await sleep(1000);
+
+    // skip, and look at the very first moment of the library
+    const built = await page.evaluate(async () => {
+      const t0 = performance.now();
+      document.getElementById('run-skip').click();
+      const t1 = performance.now();
+      const tiles = [...document.querySelectorAll('#grid .tile')];
+      const grid = document.getElementById('grid');
+      const first = { count: tiles.length, staggered: tiles.filter((t) => !t.classList.contains('is-in')).length, gridHeight: grid.getBoundingClientRect().height, heights: [...new Set(tiles.map((t) => Math.round(t.getBoundingClientRect().height)))] };
+      let frames = 0; let worst = 0; let last = performance.now();
+      await new Promise((resolve) => { const tick = (now) => { worst = Math.max(worst, now - last); last = now; frames += 1; if (now - t1 < 1200) requestAnimationFrame(tick); else resolve(); }; requestAnimationFrame(tick); });
+      return { ...first, ms: Math.round(t1 - t0), frames, worst: Math.round(worst) };
+    });
+    const demo = BIG.demos[0];
+    eq(`${label}: 24 tiles`, built.count, demo.clips.length);
+    check(`${label}: only the first screenful staggers in`, built.staggered > 0 && built.staggered < built.count && built.staggered <= 16, JSON.stringify(built));
+    check(`${label}: opening a 24 tile library is cheap`, built.ms < 60 && built.frames >= 36, JSON.stringify(built));
+    notes.push(`${label}: library opened in ${built.ms} ms of script, ${built.frames} frames in the next 1.2 s, worst frame ${built.worst} ms`);
+    await sleep(900);
+
+    const layout = await page.evaluate(() => {
+      const grid = document.getElementById('grid');
+      const s = getComputedStyle(grid);
+      const tiles = [...grid.querySelectorAll('.tile')];
+      const imgs = tiles.map((t) => t.querySelector('img'));
+      return {
+        cols: s.gridTemplateColumns.split(' ').length, gap: `${s.rowGap} ${s.columnGap}`, gridHeight: grid.getBoundingClientRect().height,
+        ratios: [...new Set(tiles.map((t) => { const r = t.getBoundingClientRect(); return Math.round((r.width / r.height) * 100) / 100; }))],
+        lazy: imgs.every((i) => i.loading === 'lazy' && i.decoding === 'async'),
+        faded: imgs.filter((i) => i.complete && i.naturalWidth).every((i) => i.classList.contains('is-loaded') && Number(getComputedStyle(i).opacity) > 0),
+        fade: getComputedStyle(imgs[0]).transitionProperty,
+        tabbable: tiles.filter((t) => t.tabIndex === 0).length,
+        allIn: tiles.every((t) => t.classList.contains('is-in'))
+      };
+    });
+    eq(`${label}: ${wantCols} columns`, layout.cols, wantCols);
+    eq(`${label}: 8px gaps both ways`, layout.gap, '8px 8px');
+    check(`${label}: fixed 16:9 boxes, so posters cannot shift anything`, layout.ratios.length === 1 && Math.abs(layout.ratios[0] - 1.78) < 0.02 && Math.abs(layout.gridHeight - built.gridHeight) < 1, JSON.stringify({ layout, before: built.gridHeight }));
+    check(`${label}: posters lazy-load and fade in`, layout.lazy && layout.faded && /opacity/.test(layout.fade) && layout.allIn, JSON.stringify(layout));
+    eq(`${label}: the grid is one tab stop`, layout.tabbable, 1);
+    const of = await overflow(page);
+    check(`${label}: no horizontal overflow (24 tiles)`, of.doc <= 0 && of.body <= 0, JSON.stringify(of));
+    await page.screenshot({ path: path.join(SHOTS, `${label}-q-library-24.png`) });
+    await page.screenshot({ path: path.join(SHOTS, `${label}-q2-library-24-full.png`), fullPage: true });
+
+    // the summary row sticks while the grid scrolls under it
+    await page.evaluate(() => { const g = document.getElementById('grid').getBoundingClientRect(); window.scrollBy(0, g.top + g.height * 0.4); });
+    await sleep(600);
+    const stuck = await page.evaluate(() => {
+      const bar = getComputedStyle(document.getElementById('summary')).display === 'contents' ? document.getElementById('stats') : document.getElementById('summary');
+      const r = bar.getBoundingClientRect();
+      const under = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { top: Math.round(r.top), flagged: document.getElementById('summary').classList.contains('is-stuck'), onTop: bar.contains(under), found: document.querySelector('#stats [data-key="found"] dd').textContent };
+    });
+    check(`${label}: the summary row sticks to the top over the grid`, stuck.top === 8 && stuck.flagged && stuck.onTop && stuck.found === String(demo.summary.found), JSON.stringify(stuck));
+    await page.screenshot({ path: path.join(SHOTS, `${label}-q3-library-24-scrolled.png`) });
+
+    if (!viewport.isMobile) {
+      // arrow keys walk the grid
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.focus('#grid .tile:nth-child(1)');
+      const focused = () => page.evaluate(() => Number(document.activeElement.dataset.index));
+      await page.keyboard.press('ArrowRight');
+      eq(`${label}: right arrow moves focus to the next tile`, await focused(), 1);
+      await page.keyboard.press('ArrowDown');
+      eq(`${label}: down arrow moves one row down`, await focused(), 1 + wantCols);
+      await page.keyboard.press('ArrowLeft');
+      await page.keyboard.press('ArrowUp');
+      eq(`${label}: left and up come back`, await focused(), 0);
+      await page.keyboard.press('ArrowLeft');
+      eq(`${label}: the first tile is an edge`, await focused(), 0);
+      await page.keyboard.press('End');
+      eq(`${label}: End jumps to the last tile`, await focused(), 23);
+      const seen = await page.evaluate(() => { const r = document.activeElement.getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight; });
+      check(`${label}: the focused tile is scrolled into view`, seen);
+      eq(`${label}: the tab stop follows focus`, await page.evaluate(() => [...document.querySelectorAll('#grid .tile')].findIndex((t) => t.tabIndex === 0)), 23);
+
+      // the viewer counts across all 24 and wraps
+      await page.keyboard.press('Enter');
+      await sleep(1200);
+      eq(`${label}: viewer counts across the whole library`, await page.$eval('#ql-count', (n) => n.textContent), '24 of 24');
+      await page.keyboard.press('ArrowRight');
+      await sleep(700);
+      eq(`${label}: next from the last clip is the first`, await page.$eval('#ql-count', (n) => n.textContent), '1 of 24');
+      for (let i = 0; i < 3; i += 1) { await page.keyboard.press('ArrowRight'); await sleep(450); }
+      eq(`${label}: arrows keep walking`, `${await page.$eval('#ql-count', (n) => n.textContent)}|${await page.$eval('#ql-title', (n) => n.textContent)}`, `4 of 24|${demo.clips[3].title}`);
+      await page.keyboard.press('Escape');
+      await sleep(900);
+      eq(`${label}: closing returns focus to the clip that was showing`, await focused(), 3);
+
+      // sweep the pointer over a row: never two clips playing, never two on the wire
+      await page.evaluate(() => document.querySelector('#grid .tile').scrollIntoView({ block: 'center' }));
+      await sleep(400);
+      let mostPlaying = 0;
+      for (const n of [1, 2, 3, 4, 3, 2]) {
+        await page.hover(`#grid .tile:nth-child(${n})`);
+        for (let i = 0; i < 4; i += 1) {
+          await sleep(110);
+          mostPlaying = Math.max(mostPlaying, await page.$$eval('#grid .tile video', (vs) => vs.filter((v) => !v.paused).length));
+        }
+      }
+      await sleep(700);
+      const resting = await page.evaluate(() => ({ playing: [...document.querySelectorAll('#grid .tile video')].filter((v) => !v.paused).length, loaded: [...document.querySelectorAll('#grid .tile video')].filter((v) => v.getAttribute('src')).length }));
+      const playable = hasClipFiles(MANIFEST.demos[0]);
+      check(`${label}: sweeping across tiles never plays two clips`, mostPlaying <= 1 && (!playable || resting.playing === 1), JSON.stringify({ mostPlaying, resting }));
+      check(`${label}: sweeping across tiles never downloads two clips at once`, mostAtOnce <= 1 && (!playable || resting.loaded === 1), JSON.stringify({ mostAtOnce, resting }));
+      await page.mouse.move(4, 4);
+      await sleep(300);
+    } else {
+      await page.evaluate(() => document.querySelector('#grid .tile:nth-child(9)').scrollIntoView({ block: 'center' }));
+      await sleep(400);
+      await page.tap('#grid .tile:nth-child(9)');
+      await sleep(1300);
+      eq(`${label}: a tap deep in the grid opens that clip`, await page.$eval('#ql-count', (n) => n.textContent), '9 of 24');
+      await page.click('#ql-close');
+      await sleep(700);
+      check(`${label}: one clip at most was ever on the wire`, mostAtOnce <= 1, String(mostAtOnce));
+    }
+    check(`${label}: no console errors (24 tiles)`, errors.length === 0, errors.join(' | '));
     await page.close();
   }
 }
@@ -475,7 +819,7 @@ async function run(label, viewport) {
   const foreign = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warn') errors.push(`${m.type()}: ${m.text()}`); });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('requestfailed', (r) => errors.push(`requestfailed: ${r.url()}`));
+  page.on('requestfailed', (r) => { if (!isCancelledClip(r)) errors.push(`requestfailed: ${r.url()}`); });
   page.on('request', (r) => { try { const h = new URL(r.url()).hostname; if (r.url().startsWith('http') && !ALLOWED_HOSTS.has(h)) foreign.push(r.url()); } catch (_) {} });
   const shot = (name, opts = {}) => page.screenshot({ path: path.join(SHOTS, `${label}-${name}.png`), ...opts });
 
@@ -607,7 +951,7 @@ async function run(label, viewport) {
     await sleep(200);
     eq(`${label}: copy feedback`, await text(page, '#copy-json'), 'Copied');
     const clip = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
-    eq(`${label}: JSON brief`, JSON.stringify(clip), JSON.stringify({ robot: 'SO-101', robotStatus: 'live', task: TASK, specificity: 5, tier: 'Curated video' }));
+    eq(`${label}: JSON brief`, JSON.stringify(clip), JSON.stringify({ robot: 'SO-101', robotStatus: 'live', task: TASK, specificity: 5, tier: 'Curated video', runnable: true, note: GRIPPER_CAVEAT }));
     await page.click('#copy-cmd');
     await sleep(200);
     eq(`${label}: copied command`, await page.evaluate(() => navigator.clipboard.readText()), `pnpm dlx tsx scripts/agent/agent.mts "${TASK}" --robot so101 --max-videos 8 --seconds 6`);
@@ -735,6 +1079,7 @@ async function run(label, viewport) {
     await page.emulateMediaFeatures([]);
   }
 
+  await fitFlow(page, label, shot);
   await demoFlow(page, label, shot);
 
   check(`${label}: no console errors or warnings`, errors.length === 0, errors.join(' | '));
@@ -746,6 +1091,7 @@ try {
   await run('desktop', { width: 1440, height: 900, deviceScaleFactor: 1 });
   await run('mobile', { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await extras();
+  await library();
 } catch (e) {
   failures += 1;
   console.log(`CRASH ${e.stack}`);

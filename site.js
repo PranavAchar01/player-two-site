@@ -173,6 +173,121 @@
     return { score, checks, hint };
   }
 
+  /* ------------------------------------------------------------ capability */
+
+  // Does the sentence make sense for this robot? Same two verdicts as the CLI:
+  //   refuse  the robot lacks a body part the task needs. The brief says so and shows no command.
+  //   warn    the run works, with a stated caveat about what video cannot teach yet.
+  // Anything else is fine. Custom robots are not judged, because nothing is known about them.
+
+  // What each kind of body has. `is` finishes the sentence "An SO-101 is ...".
+  const BODIES = {
+    arm: { is: 'one arm', has: ['arm', 'gripper'] },
+    bimanual: { is: 'two arms on a fixed base', has: ['arm', 'twoArms', 'gripper'] },
+    humanoid: { is: 'two arms, legs and a torso', has: ['arm', 'twoArms', 'legs', 'torso', 'fingers'] },
+    hand: { is: 'fingers only', has: ['fingers'] },
+    legged: { is: 'legs and no arms', has: ['legs'] },
+    leggedArm: { is: 'legs and one arm', has: ['legs', 'arm', 'gripper'] },
+    wheeledArm: { is: 'one arm on a wheeled base', has: ['arm', 'gripper'] }
+  };
+
+  // A robot's body comes from its group. The few exceptions are named.
+  const BODY_BY_GROUP = { Arms: 'arm', Humanoids: 'humanoid', Hands: 'hand', 'Quadrupeds and mobile': 'legged' };
+  const BODY_BY_NAME = {
+    'ALOHA (bimanual)': 'bimanual',
+    'Boston Dynamics Spot': 'leggedArm',
+    'Hello Robot Stretch 3': 'wheeledArm',
+    'PAL TIAGo': 'wheeledArm'
+  };
+
+  const PART_NAMES = { arm: 'an arm', twoArms: 'two arms', legs: 'legs', torso: 'a torso', fingers: 'fingers', gripper: 'a gripper' };
+
+  // The rules, first match wins within each kind. To extend: add a row.
+  //   when     words in the task that trigger the rule
+  //   needs    body parts the task cannot be done without. Any missing part is a refusal.
+  //   says     the plain reason, without the full stop
+  //   caveat   'grasp' or 'fingers': runnable, but that part of the motion is not captured
+  //   oneArm   an example worth offering when a one-arm robot is refused
+  const TASK_RULES = [
+    { when: /\bjumping[\s-]?jacks?\b|\bstar[\s-]?jumps?\b/i, needs: ['twoArms', 'legs'], says: 'Jumping jacks need two arms and legs', oneArm: 'raise its arm out to the side and lower it, twice, slowly' },
+    { when: /\bburpees?\b/i, needs: ['twoArms', 'legs', 'torso'], says: 'Burpees need two arms, legs and a torso' },
+    { when: /\b(push|press|sit|pull|chin)[\s-]?ups?\b|\bplanks?\b|\bcrunch(es)?\b/i, needs: ['twoArms', 'legs', 'torso'], says: 'Floor and bar exercises need two arms, legs and a torso' },
+    { when: /\bdanc(e|es|ed|ing)\b|\brenegade\b|\bmoonwalk\b|\bcartwheels?\b|\bhandstands?\b|\byoga\b/i, needs: ['twoArms', 'legs', 'torso'], says: 'A dance needs two arms, legs and a torso', oneArm: 'wave its arm left and right, four times, smoothly' },
+    { when: /\bsquats?\b|\blunges?\b|\bdeadlifts?\b/i, needs: ['legs', 'torso'], says: 'Squats and lunges need legs and a torso' },
+    { when: /\b(walk|jog|march|sprint|stride)(s|ed|ing)?\b|\b(run|runs|running)\b|\bclimb(s|ing)? (the |a )?stairs\b/i, needs: ['legs'], says: 'Walking and running need legs' },
+    { when: /\b(jump|hop|leap|skip)(s|ped|ing)?\b/i, needs: ['legs'], says: 'Jumping needs legs' },
+    { when: /\bkick(s|ed|ing)?\b/i, needs: ['legs'], says: 'Kicking needs legs' },
+    { when: /\b(sit|stand|kneel|crouch|lie|bend)(s|ting|ding|ing)?\s+(down|up|over)\b|\bbow(s|ed|ing)?\b|\bturn(s|ing)? around\b/i, needs: ['legs', 'torso'], says: 'That posture needs legs and a torso' },
+    { when: /\bclap(s|ped|ping)?\b|\bhigh[\s-]?fives? (itself|both)\b/i, needs: ['twoArms'], says: 'Clapping needs two hands', oneArm: 'wave hello with its arm, twice' },
+    { when: /\b(both|two|2)\s+(hands?|arms?|grippers?)\b|\bbimanual(ly)?\b|\bwith each hand\b|\bhand to hand\b/i, needs: ['twoArms'], says: 'This task asks for two hands' },
+    { when: /\bfold(s|ed|ing)?\b/i, needs: ['twoArms'], says: 'Folding needs two hands', oneArm: 'slide the folded shirt to the left edge of the table' },
+    { when: /\bt(ie|ies|ying)\b|\bknots?\b|\bshoelaces?\b/i, needs: ['twoArms', 'fingers'], says: 'Tying needs two hands with fingers' },
+    { when: /\b(open|opens|opening|unscrew\w*|uncap\w*)\s+(a |an |the |its |this |that )?(\w+\s)?(jar|bottle|lid|cap|container)s?\b/i, needs: ['twoArms'], says: 'Opening a jar needs two hands, one to hold and one to turn', oneArm: 'push the jar to the back of the table' },
+    { when: /\bbarbells?\b|\bbench[\s-]?press(es)?\b/i, needs: ['twoArms'], says: 'A barbell needs two hands' },
+    { when: /\b(carry|carries|carrying|lift|lifts|lifting)\s+(a |the |this |that )?(\w+\s)?(box|tray|crate|basket|table|chair)\b/i, needs: ['twoArms'], says: 'Carrying something that size needs two hands' },
+    { when: /\b(typ(e|es|ed|ing))\b|\bpianos?\b|\bguitars?\b|\bsign language\b|\bfingers?\b|\bthumbs?[\s-]?up\b|\bpinch(es|ing)?\b|\bsnap(s|ping)? (its|the)\b/i, needs: ['fingers'], says: 'That needs fingers', caveat: 'fingers' },
+    { when: /\bpick(s|ed|ing)?\s+(it |them |this |that )?up\b|\b(grab|grasp|grip|hold|pour|stack|place|put|insert|scoop|stir|wipe|squeeze|hand over|hang|sort)(s|bed|ped|red|ed|ing)?\b|\b(open|close|push|pull|press|turn)(s|es|ed|ing)?\s+(a |an |the |its |this |that )/i, needs: ['arm'], says: 'Handling things needs an arm', caveat: 'grasp' },
+    { when: /\b(wave|waving|waves|reach\w*|point\w*|salut\w*|punch\w*|rais\w*|lift\w*|press\w*|curl\w*|swing\w*|throw\w*|follow\w*)\b/i, needs: ['arm'], says: 'That motion needs an arm' }
+  ];
+
+  const CAVEATS = {
+    grasp: {
+      gripper: 'The gripper cannot be learned from video yet, so only the arm path is captured.',
+      fingers: 'Hands cannot be learned from video yet, so only the arm and body path is captured.'
+    },
+    fingers: {
+      fingers: 'Fingers cannot be learned from video yet, so only the arm and body path is captured.'
+    }
+  };
+
+  const bodyOf = (choice) => (choice && choice.group ? BODIES[BODY_BY_NAME[choice.name] || BODY_BY_GROUP[choice.group]] || null : null);
+
+  const listParts = (parts) => {
+    const names = parts.map((part) => PART_NAMES[part]);
+    return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+  };
+
+  // The first robot that has every needed part, preferring one that runs today.
+  function robotWith(needs) {
+    const able = ROBOTS.filter((r) => { const body = bodyOf(r); return body && needs.every((part) => body.has.includes(part)); });
+    return able.find((r) => r.status === 'live') || able[0] || null;
+  }
+
+  // { level: 'ok' | 'warn' | 'refuse', line, switchTo, oneArm }
+  function judgeFit(choice, rawTask) {
+    const task = clean(rawTask, TASK_MAX);
+    const body = bodyOf(choice);
+    if (!body || task.length < 3) return { level: 'ok', line: '' };
+
+    const hits = TASK_RULES.filter((rule) => rule.when.test(task));
+    for (const rule of hits) {
+      const missing = rule.needs.filter((part) => !body.has.includes(part));
+      if (!missing.length) continue;
+      const other = robotWith(rule.needs);
+      const canOneArm = body.has.includes('arm') && !body.has.includes('twoArms');
+      const humanoid = other && other.group === 'Humanoids';
+      let advice = other ? `Try ${humanoid ? 'a humanoid' : `${articleFor(other.name)} ${other.name}`}` : 'No robot in the list can do this yet';
+      advice += other && canOneArm ? ', or ask for a one-arm motion.' : '.';
+      const name = `${articleFor(choice.name)} ${choice.name}`;
+      return {
+        level: 'refuse',
+        line: `${name.charAt(0).toUpperCase()}${name.slice(1)} is ${body.is}. ${rule.says}. ${advice}`,
+        reason: `${rule.says}, and ${name} is ${body.is}.`,
+        missing: listParts(missing),
+        switchTo: other,
+        oneArm: canOneArm ? (rule.oneArm || 'raise its arm to shoulder height, then lower it, twice, slowly') : ''
+      };
+    }
+
+    for (const rule of hits) {
+      if (!rule.caveat) continue;
+      const texts = CAVEATS[rule.caveat];
+      const part = Object.keys(texts).find((key) => body.has.includes(key));
+      if (part) return { level: 'warn', line: body === BODIES.hand ? 'Fingers cannot be learned from video yet, so nothing in this task is captured today.' : texts[part] };
+    }
+    return { level: 'ok', line: '' };
+  }
+
   /* ----------------------------------------------------------------- state */
 
   const state = { robot: null, task: '', tier: 'curated-video', composed: false };
@@ -752,9 +867,85 @@
     if (robot.open) positionRobotList();
     if (tier.open) positionTierList();
     if (viewer.open) sizeViewer();
+    sizeFit();
   };
   window.addEventListener('resize', reposition);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', reposition);
+
+  /* ------------------------------------------------------------------- fit */
+
+  // One quiet line under the meter. It waits for a pause in typing before it appears,
+  // and its height is eased so the button below glides rather than jumps.
+  const fitEl = $('fit');
+  const fitInner = $('fit-inner');
+  const fit = { verdict: { level: 'ok', line: '' }, key: '', example: false, timer: 0 };
+
+  const currentFit = () => judgeFit(state.robot, state.task);
+
+  function sizeFit() {
+    fitEl.style.height = fitEl.classList.contains('is-on') ? `${fitInner.offsetHeight}px` : '0px';
+  }
+
+  function fitButton(label, act) {
+    const button = el('button', { type: 'button', class: 'ghost ghost--sm', text: label });
+    button.addEventListener('click', act);
+    return button;
+  }
+
+  function paintFit() {
+    const v = fit.verdict;
+    const on = v.level !== 'ok';
+    if (on) {
+      $('fit-line').textContent = fit.example ? `A one-arm version could be: "${v.oneArm}".` : v.line;
+      const buttons = [];
+      if (v.level === 'refuse') {
+        if (fit.example) {
+          buttons.push(fitButton('Use this example', () => {
+            taskEl.textContent = v.oneArm;
+            state.task = v.oneArm;
+            update();
+            composeBtn.focus({ preventScroll: true });
+            announce.textContent = 'Task replaced with the example.';
+          }));
+        }
+        if (v.switchTo) {
+          buttons.push(fitButton(`Switch to ${v.switchTo.name}`, () => {
+            chooseRobot(v.switchTo, false);
+            composeBtn.focus({ preventScroll: true });
+            announce.textContent = `Robot changed to ${v.switchTo.name}.`;
+          }));
+        }
+        if (v.oneArm && !fit.example) {
+          // Offers an example. Nothing is rewritten until the example itself is chosen.
+          buttons.push(fitButton('Make it one arm', () => {
+            fit.example = true;
+            paintFit();
+            const first = $('fit-actions').querySelector('button');
+            if (first) first.focus({ preventScroll: true });
+          }));
+        }
+      }
+      $('fit-actions').replaceChildren(...buttons);
+      $('fit-actions').hidden = !buttons.length;
+    }
+    fitEl.classList.toggle('is-on', on);
+    fitEl.inert = !on;
+    sizeFit();
+  }
+
+  function syncFit() {
+    const v = currentFit();
+    const key = `${v.level}|${v.line}`;
+    fitEl.dataset.level = v.level;
+    if (key === fit.key) return;
+    fit.key = key;
+    fit.verdict = v;
+    fit.example = false;
+    window.clearTimeout(fit.timer);
+    const typing = document.activeElement === taskEl || fill.active;
+    if (v.level === 'ok' || !booted || !typing || fitEl.classList.contains('is-on')) paintFit();
+    else fit.timer = window.setTimeout(paintFit, 380);
+  }
 
   /* ----------------------------------------------------------------- brief */
 
@@ -767,7 +958,7 @@
   // The command as tokens, so the block can keep each flag on one line while the task wraps.
   function commandTokens() {
     const t = tierById(state.tier);
-    if (!state.robot || state.robot.status !== 'live' || t.level === 1) return [];
+    if (!state.robot || state.robot.status !== 'live' || t.level === 1 || currentFit().level === 'refuse') return [];
     const tokens = [
       { text: 'pnpm dlx tsx', solid: true },
       { text: 'scripts/agent/agent.mts', solid: true },
@@ -790,7 +981,9 @@
       robotStatus: state.robot.status,
       task: clean(state.task, TASK_MAX),
       specificity: scoreTask(state.task).score,
-      tier: tierById(state.tier).title
+      tier: tierById(state.tier).title,
+      runnable: currentFit().level !== 'refuse',
+      ...(currentFit().line ? { note: currentFit().line } : {})
     }, null, 2);
   }
 
@@ -818,6 +1011,15 @@
     const t = tierById(state.tier);
     const spec = scoreTask(state.task);
     const live = state.robot.status === 'live';
+    const verdict = currentFit();
+    const refused = verdict.level === 'refuse';
+
+    // A refused run leads with the refusal, says why, and never shows a command.
+    $('brief-title').textContent = refused ? 'Not runnable on this robot' : 'Run brief';
+    briefWrap.classList.toggle('is-refused', refused);
+    $('brief-fit-row').hidden = verdict.level === 'ok';
+    $('brief-fit-label').textContent = refused ? 'Why not' : 'Caveat';
+    $('brief-fit-line').textContent = verdict.line;
 
     sentenceInto($('brief-sentence'), state.robot.name, clean(state.task, TASK_MAX), t.title);
 
@@ -825,7 +1027,7 @@
     const status = $('brief-status');
     status.textContent = state.robot.status;
     status.className = `tag tag--${state.robot.status}`;
-    $('brief-robot-line').textContent = live ? 'Runs today.' : 'Not wired up yet. The brief is saved for when it is.';
+    $('brief-robot-line').textContent = live ? (refused ? 'Runs today, but not this task.' : 'Runs today.') : 'Not wired up yet. The brief is saved for when it is.';
 
     $('brief-tier').textContent = t.title;
     $('brief-tier-tag').textContent = t.tag;
@@ -835,7 +1037,7 @@
     $('brief-spec-line').textContent = spec.hint;
 
     const command = buildCommand();
-    $('brief-run-row').hidden = !live;
+    $('brief-run-row').hidden = !live || refused;
     $('cmd-block').hidden = !command;
     const code = $('cmd');
     code.replaceChildren();
@@ -872,7 +1074,7 @@
     renderBrief();
     showBrief(true);
     revealOutput($('brief'), 'nearest');
-    announce.textContent = 'Run brief composed below.';
+    announce.textContent = currentFit().level === 'refuse' ? 'Not runnable on this robot. The brief below says why.' : 'Run brief composed below.';
   }
 
   function closeOutput() {
@@ -1027,7 +1229,7 @@
 
   // A run matches a demo when the robot is the same and the task has every word of one entry.
   function findDemo() {
-    if (!state.robot) return null;
+    if (!state.robot || currentFit().level === 'refuse') return null;
     const words = clean(state.task, TASK_MAX).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
     const has = (word) => words.some((w) => w === word || (word.length > 3 && w.startsWith(word)));
     const robotName = state.robot.name.toLowerCase();
@@ -1219,13 +1421,21 @@
     const s = demo.summary;
     setStatus(manifest.placeholder ? 'Nothing to show.' : `Finished in ${formatSpan(s.seconds)}.`,
       manifest.placeholder ? 'Add media/demo/manifest.json to see a recorded run here.' : `${s.accepted} accepted, ${s.rejected} rejected, ${s.episodes} episodes written. Select a step to read what it did.`, true);
+    // Only the first screenful makes an entrance. Everything further down is simply there.
+    const panelTop = output.querySelector('.output-panel').getBoundingClientRect().top;
+    let entering = 0;
+    tiles.forEach((tile) => {
+      const first = tile.getBoundingClientRect().top - panelTop < window.innerHeight && entering < 16;
+      tile.classList.toggle('is-in', !first);
+      if (first) { tile.style.setProperty('--i', String(entering)); entering += 1; }
+    });
     resultsEl.inert = false;
     resultsEl.classList.add('is-open');
     window.clearTimeout(run.settleTimer);
     run.settleTimer = window.setTimeout(() => {
       resultsEl.classList.add('is-settled');
-      gridEl.querySelectorAll('.tile').forEach((tile) => tile.classList.add('is-in'));
-    }, reducedMotion.matches ? 0 : 480 + demo.clips.length * 50 + 200);
+      tiles.forEach((tile) => tile.classList.add('is-in'));
+    }, reducedMotion.matches ? 0 : 480 + entering * 40 + 200);
     sfx('success');
     announce.textContent = `Run finished. ${demo.clips.length} clips below.`;
     run.waiters.splice(0).forEach((resolve) => resolve());
@@ -1310,11 +1520,13 @@
   function buildGrid(demo) {
     stopPeek();
     tiles = demo.clips.map((clip, index) => {
-      const tile = el('button', { type: 'button', class: 'tile', 'data-index': String(index), 'aria-label': `Open clip ${index + 1} of ${demo.clips.length}: ${clip.title}` });
-      tile.style.setProperty('--i', String(Math.min(index, 9)));
+      const tile = el('button', { type: 'button', class: 'tile', tabindex: index ? '-1' : '0', 'data-index': String(index), 'aria-label': `Open clip ${index + 1} of ${demo.clips.length}: ${clip.title}` });
       if (clip.poster) {
-        const img = el('img', { alt: '', loading: 'lazy', decoding: 'async', draggable: 'false', src: clip.poster });
+        // The box has a fixed shape, so a poster arriving late fades in without moving anything.
+        const img = el('img', { alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' });
+        img.addEventListener('load', () => img.classList.add('is-loaded'));
         img.addEventListener('error', () => tile.classList.add('no-poster'));
+        img.src = clip.poster;
         tile.append(img);
       } else {
         tile.classList.add('no-poster');
@@ -1338,6 +1550,7 @@
         scrubPeek(tile, event.clientX);
       });
       tile.addEventListener('pointerleave', () => endPeek(tile));
+      tile.addEventListener('focus', () => setRoving(index));
       tile.addEventListener('click', () => openViewer(index, tile));
       return tile;
     });
@@ -1355,6 +1568,25 @@
     $('rejects-list').replaceChildren(...rejects.map((item) => el('li', { class: 'reject' },
       item.title ? el('b', { text: item.reason ? `${item.title}: ` : item.title }) : null, item.reason)));
   }
+
+  // One tab stop for the whole grid. Arrow keys move between tiles, as in a photo library.
+  function setRoving(index) {
+    tiles.forEach((tile, i) => { tile.tabIndex = i === index ? 0 : -1; });
+  }
+
+  gridEl.addEventListener('keydown', (event) => {
+    const index = tiles.indexOf(document.activeElement);
+    if (index < 0) return;
+    const cols = window.getComputedStyle(gridEl).gridTemplateColumns.split(' ').length;
+    const last = tiles.length - 1;
+    let next = { ArrowRight: index + 1, ArrowLeft: index - 1, ArrowDown: index + cols, ArrowUp: index - cols, Home: 0, End: last }[event.key];
+    if (next == null) return;
+    // Down from the row above a short last row lands on the last tile.
+    if (event.key === 'ArrowDown' && next > last && Math.floor(index / cols) < Math.floor(last / cols)) next = last;
+    if (next < 0 || next > last || next === index) return;
+    event.preventDefault();
+    tiles[next].focus();
+  });
 
   // "Creative Commons Attribution (CC BY)" reads as "CC BY" on a tile; the viewer has the full name.
   function shortLicence(text) {
@@ -1407,7 +1639,10 @@
   function haltTile(tile) {
     const video = tile.querySelector('video');
     tile.classList.remove('is-playing');
-    if (video && !video.paused) video.pause();
+    if (!video) return;
+    if (!video.paused) video.pause();
+    // Dropping the source cancels the download, so at most one clip is ever on the wire.
+    if (video.getAttribute('src')) { video.removeAttribute('src'); video.load(); }
   }
 
   function endPeek(tile) {
@@ -1428,6 +1663,12 @@
   const offscreen = new IntersectionObserver((entries) => {
     for (const entry of entries) if (!entry.isIntersecting && peek.tile === entry.target) endPeek(entry.target);
   });
+
+  // The summary row floats over the grid once it reaches the top. It gains a material only then.
+  const summaryEl = $('summary');
+  new IntersectionObserver(([entry]) => {
+    summaryEl.classList.toggle('is-stuck', !entry.isIntersecting && entry.boundingClientRect.top < 12);
+  }, { rootMargin: '-10px 0px 0px 0px', threshold: 0 }).observe($('summary-sentinel'));
 
   /* ---------------------------------------------------------------- viewer */
 
@@ -1767,6 +2008,8 @@
     const hint = $('spec-hint');
     if (hint.textContent !== spec.hint) hint.textContent = spec.hint;
 
+    syncFit();
+
     const valid = isValid();
     composeBtn.disabled = !valid;
     // Open output follows the blanks. While they no longer describe it, it dims instead of jumping away.
@@ -1940,6 +2183,17 @@
           await glide(x, y, 1900, (cx) => scrubPeek(tile, cx));
           await wait(500);
           endPeek(tile);
+        }
+
+        // Let the library show its size: drift down through the grid and come back.
+        const spill = gridEl.getBoundingClientRect().bottom - window.innerHeight;
+        if (spill > 80) {
+          const travel = Math.round(Math.min(spill + 96, window.innerHeight * 0.8));
+          await glide(window.innerWidth * 0.82, window.innerHeight * 0.6);
+          window.scrollBy({ top: travel, behavior: 'smooth' });
+          await wait(1700);
+          window.scrollBy({ top: -travel, behavior: 'smooth' });
+          await wait(1300);
         }
 
         // Open one, move to the next, close.

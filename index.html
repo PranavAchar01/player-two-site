@@ -60,7 +60,15 @@
               <span class="seg" data-check="manner"><i></i><b>Manner</b></span>
             </div>
           </div>
-          <p class="spec-line">The more specific you are, the better the training data. <span class="spec-hint" id="spec-hint" role="status"></span></p>
+          <div class="spec-copy">
+            <p class="spec-line">The more specific you are, the better the training data. <span class="spec-hint" id="spec-hint" role="status"></span></p>
+            <div class="fit" id="fit" data-level="ok">
+              <div class="fit-inner" id="fit-inner">
+                <p class="fit-line" id="fit-line" role="status"></p>
+                <div class="fit-actions" id="fit-actions"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="actions">
@@ -91,6 +99,7 @@
               <p class="step-status" id="step-status" role="status"><span class="step-status-text"><b id="step-status-name"></b><span id="step-status-detail"></span></span><span class="step-took" id="step-took"></span></p>
             </div>
 
+            <div class="summary-sentinel" id="summary-sentinel" aria-hidden="true"></div>
             <div class="summary" id="summary">
               <dl class="stats" id="stats">
                 <div class="stat" data-key="found"><dd>0</dd><dt>Found</dt></div>
@@ -127,6 +136,10 @@
               <p class="brief-sentence" id="brief-sentence"></p>
 
               <dl class="brief-rows">
+                <div class="brief-row brief-row--fit" id="brief-fit-row" hidden>
+                  <dt id="brief-fit-label">Caveat</dt>
+                  <dd><p id="brief-fit-line"></p></dd>
+                </div>
                 <div class="brief-row">
                   <dt>Robot</dt>
                   <dd>
